@@ -1,147 +1,141 @@
 # Tacaño 🪙
 
-**Tu Claude, pero tacaño con los tokens.** ~39% menos gasto en Claude Code, mismo Opus.
+**English** · [Español](README.es.md)
+
+**Your Claude, but stingy with tokens.** ~39% lower Claude Code spend, same Opus.
+
+*Tacaño* is Spanish for "stingy".
 
 ```
 /plugin marketplace add Nicolas6879/tacano
 /plugin install tacano@tacano-marketplace
 ```
 
-Opus orquesta y [Jev](https://docs.typesafe.ai) (TypeSafe System One), un modelo que solo toma decisiones, decide en ~400 ms y por ~$0.00007 cuándo compactar, qué conservar y qué delegar a trabajadores baratos.
+Opus stays the orchestrator. [Jev](https://docs.typesafe.ai) (TypeSafe System One) is a decision-only model: on every prompt it decides, in ~400 ms and for ~$0.00007, when to compact, what to keep, and what to hand off to cheap workers.
 
-> **English summary.** *Tacaño* is Spanish for "stingy": a Claude Code plugin that cuts token spend by ~39% (35% under pessimistic assumptions), measured by replaying 500 real Claude Code turns with the plugin's own code. Opus stays the orchestrator. On every prompt, a hook asks Jev, a decision-only model (~400 ms, ~$0.00007 per call), whether to: (1) suggest `/compact` or `/clear` at a natural task boundary once the context is large, (2) preserve verbatim excerpts across compaction so the summary doesn't lose key details, or (3) hint Opus to delegate heavy tool-loops to cheap Sonnet/Haiku workers. Everything else passes through silently. See [English quick start](#english-quick-start).
+## The problem
 
-## El problema
+In Claude Code, almost all of the spend is **re-reading the context** on every tool call. Cache reads and writes are ~89% of the cost; model output is only ~11%. Long sessions reach 500k–1M tokens, and every response reads all of it again.
 
-En Claude Code casi todo el gasto viene de **releer el contexto** en cada llamada a herramientas: la lectura y la escritura de caché suman ~89% del costo, y la salida del modelo apenas ~11%. Las sesiones largas llegan a 500k–1M tokens y cada respuesta vuelve a leer todo eso. Usar "un modelo más barato" no alcanza: Sonnet 5.5 cobra la lectura de caché igual que Opus 5.5, y **delegar todo a Sonnet costó 22% más** en nuestras mediciones.
+"Just use a cheaper model" doesn't fix this:
+- Sonnet 5.5 charges the same for cache reads as Opus 5.5.
+- In our measurements, **delegating everything to Sonnet cost 22% more**.
 
-## Qué hace
+## What it does
 
-En cada prompt, un hook le hace a Jev 7 preguntas tipadas en un solo request: volumen de trabajo, intención, modelo adecuado, si es sensible, si necesita el historial, si es un límite de tarea, etc. Con esas respuestas, el código decide:
+On every prompt, a hook asks Jev 7 typed questions in a single request: work volume, intent, which model fits, whether it's sensitive, whether it needs the history, whether it's a task boundary, and so on. The code then acts on the answers:
 
-| Situación | Acción |
+| Situation | Action |
 |---|---|
-| Contexto ≥250k **y** Jev detecta que empiezas una tarea nueva, o contexto ≥550k, o caché vencido con ≥300k | Bloquea el prompt (0 tokens) y sugiere `/compact`, o `/clear` si el pedido no necesita el historial. Después escribes "sigue" y tu mensaje se restaura solo. Para saltarte el bloqueo, reenvía el mismo mensaje. |
-| Cualquier compactación (manual o automática) | `PreCompact` guarda ~13k tokens de extractos **literales** (lo más reciente + decisiones, restricciones y valores concretos) y `SessionStart` los reinyecta. |
-| Trabajo pesado (≥9 acciones previstas) con ahorro esperado > $0.05 | Pista para Opus: delega la ejecución en `sonnet-worker` o `haiku-worker` (agentes con herramientas restringidas que arrancan livianos) y revisa el resultado. |
-| Opiniones, decisiones, secretos, firmas, pagos, publicaciones | Nunca se delegan. |
-| Todo lo demás | Silencio. |
+| Context ≥250k **and** Jev sees you starting a new task, or context ≥550k, or an expired cache with ≥300k | Blocks the prompt (0 tokens spent) and suggests `/compact`, or `/clear` if the request doesn't need the history. Type "continue" afterwards and your message is restored automatically. Resend the same message to skip the block. |
+| Any compaction (manual or automatic) | `PreCompact` saves ~13k tokens of **verbatim** excerpts (the most recent history plus decisions, constraints and concrete values). `SessionStart` injects them back after the summary. |
+| Heavy execution (≥9 expected tool actions) with an expected saving above $0.05 | Hints Opus to delegate the execution to `sonnet-worker` or `haiku-worker` (restricted-tool agents that start with a small context) and review the result. |
+| Opinions, decisions, secrets, signing, payments, publishing | Never delegated. |
+| Everything else | Silence. |
 
-Falla en modo seguro: si Jev no responde o hay un error, nunca bloquea por eso. Solo aplica reglas de código, como el tope de 550k.
+It fails safe. If Jev doesn't answer or something errors, Tacaño never blocks because of it; only code rules apply, such as the 550k hard cap.
 
-## Resultados
+## Results
 
-Replay de 500 turnos reales, llamada por llamada, con el código del plugin y respuestas reales de Jev:
+Replay of 500 real turns, call by call, using the plugin's own code and real Jev answers:
 
-| Métrica | Valor |
+| Metric | Value |
 |---|---|
-| Ahorro de costo | **39.1%** (35.4% con supuestos pesimistas) |
-| En sesiones de 500k–1M tokens | ~50% |
-| Interrupciones | 1 cada ~38 prompts |
-| Lo que sobrevive a una compactación | resumen solo: 50% → resumen + traspaso: ~85–95% |
-| Latencia del hook | p50 ~430 ms; `PreCompact` <1 s con un transcript de 26 MB |
+| Cost saved | **39.1%** (35.4% under pessimistic assumptions) |
+| In 500k–1M-token sessions | ~50% |
+| Interruptions | 1 every ~38 prompts |
+| Information that survives a compaction | summary alone: 50% → summary + handoff: ~85–95% |
+| Hook latency | gate p50 ~430 ms; `PreCompact` <1 s on a 26 MB transcript |
 | Tests | 31/31 |
 
-Qué se probó y se descartó:
-- **RTK**: perdía la información que Claude necesitaba después.
-- **context-mode**: en lecturas de código conservó solo el 2% de lo útil.
-- **Jev eligiendo qué guardar**: no le ganó a "lo más reciente".
+Tried and dropped:
+- **RTK**: lost information Claude needed afterwards.
+- **context-mode**: kept only 2% of what mattered on code reads.
+- **Jev choosing what to keep**: it didn't beat "keep the most recent".
 
-## Instalación
+## Install
 
-Requisitos:
-- Claude Code (CLI o la app de escritorio).
-- Python 3 en el PATH como `python`.
-- Una API key de TypeSafe en `TYPESAFE_API_KEY`, o una línea `TYPESAFE_API_KEY=...` en `~/.typesafe.env`.
+Requirements:
+- Claude Code (CLI or desktop app).
+- Python 3 on your PATH as `python`.
+- A TypeSafe API key, either in `TYPESAFE_API_KEY` or as a `TYPESAFE_API_KEY=...` line in `~/.typesafe.env`.
 
-Desde GitHub:
+From GitHub:
 
 ```
 /plugin marketplace add Nicolas6879/tacano
 /plugin install tacano@tacano-marketplace
 ```
 
-Desde una copia local:
+From a local clone:
 
 ```
-/plugin marketplace add /ruta/a/tacano
+/plugin marketplace add /path/to/tacano
 /plugin install tacano@tacano-marketplace
 ```
 
-El plugin empieza a funcionar en la siguiente sesión.
+The plugin takes effect from the next session.
 
-## Configuración
+## Configuration
 
-Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/tacano-…/`) solo con las claves que quieras cambiar:
+Create `config.json` in the plugin's data folder (`~/.claude/plugins/data/tacano-…/`) with only the keys you want to change:
 
 ```json
 { "lang": "en", "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
   "boundary_threshold": 0.7, "handoff_budget_chars": 48000, "enabled": true }
 ```
 
-Todas las claves y sus valores por defecto están en `plugins/tacano/scripts/jevlib.py` (`DEFAULTS`).
+Messages default to Spanish (`"lang": "es"`); set `"lang": "en"` for English. Every key and its default is in `DEFAULTS` in `plugins/tacano/scripts/jevlib.py`.
 
-## Medir el ahorro real
+## Measure your real savings
 
 ```
 python plugins/tacano/scripts/report.py
 ```
 
-Compara el costo por prompt antes y después de instalar (desde tus transcripts locales, subagentes incluidos). También cuenta bloqueos, overrides y traspasos, y muestra si Opus siguió las pistas de delegación.
+`report.py` compares your cost per prompt before and after installing, using your local transcripts (subagents included). It also counts blocks, overrides and handoffs, and shows whether Opus followed the delegation hints.
 
-## Privacidad
+## Privacy
 
-- Antes de enviar texto a Jev se redactan claves, tokens, contraseñas y llaves privadas. Solo se envía el prompt, el prompt anterior y el final del último mensaje del asistente.
-- El log local (`decisions.jsonl`) guarda hashes y números, nunca el texto de tus prompts.
-- Los extractos del traspaso se quedan en tu máquina.
+- Keys, tokens, passwords and private keys are redacted before anything is sent to Jev. Only the prompt, the previous prompt and the end of the last assistant message are sent.
+- The local log (`decisions.jsonl`) stores hashes and numbers, never the text of your prompts.
+- Handoff excerpts stay on your machine.
 
-## Estructura
+## Layout
 
 ```
-.claude-plugin/marketplace.json     marketplace (este repo)
+.claude-plugin/marketplace.json     marketplace (this repo)
 plugins/tacano/
   .claude-plugin/plugin.json
   hooks/hooks.json                  UserPromptSubmit, PreCompact, SessionStart
-  scripts/jevlib.py                 config, cliente Jev, política, costos, traspaso
-  scripts/gate.py                   decide bloquear, sugerir delegación o nada
-  scripts/precompact.py             guarda el traspaso literal
-  scripts/session.py                reinyecta el traspaso y el mensaje pendiente
-  scripts/report.py                 mide el ahorro real
+  scripts/jevlib.py                 config, Jev client, policy, cost model, handoff
+  scripts/gate.py                   decides: block, delegation hint, or nothing
+  scripts/precompact.py             saves the verbatim handoff
+  scripts/session.py                re-injects the handoff and any held-back message
+  scripts/report.py                 measures real savings
   agents/                           sonnet-worker, haiku-worker, haiku-browser-worker
-  skills/orchestrator/          protocolo para Opus
-lab/                                simulaciones y evaluación (usan TUS transcripts)
+  skills/orchestrator/              protocol for Opus
+lab/                                simulations and evaluation (run on YOUR transcripts)
 ```
 
-## Laboratorio
+## Lab
 
-`lab/` reproduce el análisis con los transcripts locales de quien lo ejecute (`~/.claude/projects`). Los datos generados (`lab/*.json`) contienen texto de prompts y están en `.gitignore`.
-
-```
-python lab/mine2.py && python lab/mine3.py      # extrae turnos
-python lab/final_sim.py fetch                   # respuestas de Jev a las preguntas del plugin
-python lab/final_sim.py grid                    # replay completo + grilla de ajuste
-python lab/test_hooks.py                        # 31 tests de casos límite
-```
-
-## Limitaciones
-
-- En sesiones cortas (menos de 200k tokens) casi no interviene. Es lo esperado: ahí hay poco que ahorrar.
-- La calidad del traspaso se midió con un proxy: rutas, URLs, IDs e identificadores reutilizados después de compactar.
-- La pista de delegación es un consejo. `report.py` mide cuánto la sigue Opus.
-- Los precios están fijados al 2026-09-25 (clave `prices` en la configuración).
-
-## English quick start
+`lab/` reproduces the analysis using the local transcripts of whoever runs it (`~/.claude/projects`). Generated data (`lab/*.json`) contains prompt text and is git-ignored.
 
 ```
-/plugin marketplace add Nicolas6879/tacano
-/plugin install tacano@tacano-marketplace
+python lab/mine2.py && python lab/mine3.py      # extract turns
+python lab/final_sim.py fetch                   # Jev answers to the plugin's questions
+python lab/final_sim.py grid                    # full replay + tuning grid
+python lab/test_hooks.py                        # 31 edge-case tests
 ```
 
-1. Set `TYPESAFE_API_KEY`, or add a line to `~/.typesafe.env`.
-2. Optionally set `{"lang": "en"}` in the plugin data folder's `config.json`.
-3. Start a new session.
-4. After a few days, run `report.py` to see your real savings.
+## Limitations
 
-## Licencia
+- Short sessions (under 200k tokens) see little change. That's expected: there's not much to save there.
+- Handoff quality was measured with a proxy: paths, URLs, IDs and identifiers reused after compaction.
+- The delegation hint is advice, not enforcement. `report.py` measures how often Opus follows it.
+- Prices are pinned to 2026-09-25 (the `prices` key in the configuration).
+
+## License
 
 MIT
