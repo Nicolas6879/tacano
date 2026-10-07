@@ -76,11 +76,11 @@ El plugin empieza a funcionar en la siguiente sesión.
 Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/tacano-…/`) solo con las claves que quieras cambiar:
 
 ```json
-{ "lang": "en", "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
+{ "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
   "boundary_threshold": 0.7, "handoff_budget_chars": 48000, "enabled": true }
 ```
 
-Todas las claves y sus valores por defecto están en `plugins/tacano/scripts/jevlib.py` (`DEFAULTS`).
+**Idioma:** al activar el plugin, Claude Code te pide elegir English o Español, y puedes cambiarlo después en `/config` (requiere Claude Code v2.1.271 o posterior). Las demás claves y sus valores por defecto están en `plugins/tacano/scripts/jevlib.py` (`DEFAULTS`).
 
 ## Medir el ahorro real
 

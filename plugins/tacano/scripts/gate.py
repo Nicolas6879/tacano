@@ -11,16 +11,16 @@ import jevlib as J
 
 MSG = {
     "es": {
-        "clear": ("[tacano] Esto parece un tema nuevo y la sesión ya carga {ctx}k tokens{cold}. "
+        "clear": ("[tacano] 🪙 Modo tacaño: esto parece un tema nuevo y la sesión ya carga {ctx}k tokens{cold}. "
                   "Seguir aquí cuesta ~${now:.2f} solo en releer el contexto, y cada respuesta lo vuelve a leer. "
                   "Usa /clear (o una sesión nueva) y vuelve a enviar el mensaje: tras /clear te lo recuerdo. "
                   "Para seguir aquí igualmente, reenvía el mismo mensaje."),
-        "compact": ("[tacano] {why}La sesión carga {ctx}k tokens{cold}; cada respuesta relee todo eso (~${now:.2f} por llamada{cw}). "
+        "compact": ("[tacano] 🪙 Modo tacaño: {why}la sesión carga {ctx}k tokens{cold}; cada respuesta relee todo eso (~${now:.2f} por llamada{cw}). "
                     "Ejecuta /compact y luego escribe 'sigue': retomo tu mensaje automáticamente. "
                     "Para seguir sin compactar, reenvía el mismo mensaje."),
         "cold": " y el caché expiró (reanudar reescribe todo)",
         "cw": "; esta primera, al estar frío, ~${first:.2f}",
-        "why_boundary": "Buen momento para compactar: parece que empiezas una tarea nueva. ",
+        "why_boundary": "buen momento para compactar, parece que empiezas una tarea nueva. ",
         "kept": " Al compactar guardo extractos literales de lo reciente y de las decisiones clave.",
         "hint": ("[tacano] Jev estima trabajo de ejecución {vol} (P={p:.2f}), apto para {worker}. Política: decide/planea tú; "
                  "delega la ejecución con Agent(subagent_type=\"tacano:{worker}-worker\") y un brief autocontenido "
@@ -28,16 +28,16 @@ MSG = {
                  "Si la petición es sobre todo opinión o decisión, ignora esta pista."),
     },
     "en": {
-        "clear": ("[tacano] This looks like a new topic and the session already carries {ctx}k tokens{cold}. "
+        "clear": ("[tacano] 🪙 Being stingy: this looks like a new topic and the session already carries {ctx}k tokens{cold}. "
                   "Continuing here costs ~${now:.2f} just to re-read context, on every response. "
                   "Run /clear (or open a new session) and resend; after /clear I'll remind Claude of your message. "
                   "To continue here anyway, resend the same message."),
-        "compact": ("[tacano] {why}The session carries {ctx}k tokens{cold}; every response re-reads it (~${now:.2f} per call{cw}). "
+        "compact": ("[tacano] 🪙 Being stingy: {why}the session carries {ctx}k tokens{cold}; every response re-reads it (~${now:.2f} per call{cw}). "
                     "Run /compact, then type 'continue': your message is restored automatically. "
                     "To continue without compacting, resend the same message."),
         "cold": " and the cache expired (resuming rewrites all of it)",
         "cw": "; this first one, being cold, ~${first:.2f}",
-        "why_boundary": "Good moment to compact: you seem to be starting a new task. ",
+        "why_boundary": "good moment to compact, you seem to be starting a new task. ",
         "kept": " On compaction I keep verbatim excerpts of recent history and key decisions.",
         "hint": ("[tacano] Jev estimates {vol} execution work (P={p:.2f}), suitable for {worker}. Policy: you decide/plan; "
                  "delegate execution with Agent(subagent_type=\"tacano:{worker}-worker\") and a self-contained brief "
@@ -49,7 +49,7 @@ MSG = {
 
 def main():
     t0 = time.perf_counter()
-    inp = json.loads(sys.stdin.read() or "{}")
+    inp = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     cfg = J.config()
     if not cfg.get("enabled", True):
         return
@@ -108,7 +108,7 @@ def main():
     rec["hook_ms"] = round((time.perf_counter() - t0) * 1000)
     J.log(rec)
     if out:
-        print(json.dumps(out, ensure_ascii=False))
+        print(json.dumps(out))
 
 
 if __name__ == "__main__":

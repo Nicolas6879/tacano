@@ -19,5 +19,17 @@
     "opus"
   ],
   "repository": "https://github.com/Nicolas6879/tacano",
-  "homepage": "https://github.com/Nicolas6879/tacano"
+  "homepage": "https://github.com/Nicolas6879/tacano",
+  "userConfig": {
+    "lang": {
+      "type": "string",
+      "title": "Language / Idioma",
+      "description": "Language of Tacaño's messages. Idioma de los mensajes de Tacaño.",
+      "options": [
+        "en",
+        "es"
+      ],
+      "default": "en"
+    }
+  }
 }

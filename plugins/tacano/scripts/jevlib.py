@@ -15,7 +15,7 @@ DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA") or (pathlib.Path.home()
 DATA.mkdir(parents=True, exist_ok=True)
 
 DEFAULTS = {
-    "lang": "es",
+    "lang": "en",                      # message language: "en" or "es"
     "compact_at_tokens": 250_000,      # warm context: from here, suggest /compact only at a task boundary (Jev)
     "hard_compact_at_tokens": 550_000, # warm context: suggest /compact regardless of boundary
     "cold_compact_at_tokens": 300_000, # cache expired (>55 min idle): suggest above this
@@ -46,11 +46,15 @@ DEFAULTS = {
 
 def config():
     cfg = dict(DEFAULTS)
-    for p in (ROOT / "config.json", DATA / "config.json"):
+    for p in (ROOT / "config.json", DATA / "config.json", pathlib.Path.home() / ".tacano.json"):
         try:
             cfg.update(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             pass
+    # Choice made at install time (plugin userConfig, editable in /config) wins over defaults and files.
+    lang = os.environ.get("CLAUDE_PLUGIN_OPTION_LANG", "").strip().lower()
+    if lang in ("en", "es"):
+        cfg["lang"] = lang
     return cfg
 
 

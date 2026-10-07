@@ -9,7 +9,7 @@ import jevlib as J
 
 
 def main():
-    inp = json.loads(sys.stdin.read() or "{}")
+    inp = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     cfg = J.config()
     if not cfg.get("enabled", True) or not inp.get("transcript_path"):
         return

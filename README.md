@@ -81,11 +81,11 @@ The plugin takes effect from the next session.
 Create `config.json` in the plugin's data folder (`~/.claude/plugins/data/tacano-…/`) with only the keys you want to change:
 
 ```json
-{ "lang": "en", "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
+{ "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
   "boundary_threshold": 0.7, "handoff_budget_chars": 48000, "enabled": true }
 ```
 
-Messages default to Spanish (`"lang": "es"`); set `"lang": "en"` for English. Every key and its default is in `DEFAULTS` in `plugins/tacano/scripts/jevlib.py`.
+**Language:** Claude Code asks you to pick English or Español when the plugin is enabled, and you can change it later in `/config` (requires Claude Code v2.1.271+). Every other key and its default is in `DEFAULTS` in `plugins/tacano/scripts/jevlib.py`.
 
 ## Measure your real savings
 

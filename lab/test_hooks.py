@@ -4,9 +4,9 @@ TMP = pathlib.Path(tempfile.mkdtemp(prefix="jevtest-"))
 
 
 def run(script, payload, env_extra=None, raw=None):
-    env = {**os.environ, "CLAUDE_PLUGIN_DATA": str(TMP / "data"), "PYTHONIOENCODING": "utf-8", **(env_extra or {})}
+    env = {k: v for k, v in {**os.environ, "CLAUDE_PLUGIN_DATA": str(TMP / "data"), **(env_extra or {})}.items() if k != "PYTHONIOENCODING"}
     t = time.perf_counter()
-    p = subprocess.run([sys.executable, str(PLUG / script)], input=(raw if raw is not None else json.dumps(payload)),
+    p = subprocess.run([sys.executable, str(PLUG / script)], input=(raw if raw is not None else json.dumps(payload, ensure_ascii=False)),
                        capture_output=True, text=True, env=env, encoding="utf-8", timeout=30)
     ms = (time.perf_counter() - t) * 1000
     out = json.loads(p.stdout) if p.stdout.strip() else None
@@ -41,6 +41,8 @@ def check(name, cond, info=""):
         fail += 1; print("FAIL", name, info)
 
 
+rc, out, ms, _ = run("gate.py", {"prompt": "sí, dale con todo 🚀 implementa la sección de pagos con ñandú_config y tests", "session_id": "u1", "transcript_path": transcript(150_000)})
+check("unicode/emoji prompt under cp1252 console -> valid output", rc == 0 and (out is None or isinstance(out, dict)) and last_log().get("action") not in ("crash", None), str(last_log().get("action")))
 rc, out, ms, _ = run("gate.py", {"prompt": "/compact", "session_id": "s1", "transcript_path": transcript(300_000)})
 check("slash command silent", rc == 0 and out is None)
 
@@ -59,6 +61,9 @@ check("420k mid-task (no boundary) -> no block", not (out and out.get("decision"
 
 rc, out, ms, _ = run("gate.py", {"prompt": p5, "session_id": "s4", "transcript_path": transcript(560_000)})
 check("560k hard limit -> block compact", out and out.get("decision") == "block" and "/compact" in out["reason"], f"{ms:.0f}ms")
+rc, out2, ms, _ = run("gate.py", {"prompt": p5 + " ya", "session_id": "s4lang", "transcript_path": transcript(560_000)}, {"CLAUDE_PLUGIN_OPTION_LANG": "es"})
+check("install-time choice es -> Spanish", out2 and "Modo tacaño" in out2["reason"])
+check("default language English with stingy tone", out and "Being stingy" in out["reason"] and "🪙" in out["reason"])
 
 rc, out, ms, _ = run("gate.py", {"prompt": p5, "session_id": "s4", "transcript_path": transcript(560_000)})
 check("resend same prompt overrides", not (out and out.get("decision") == "block"), str(last_log().get("action")))
@@ -71,7 +76,7 @@ rc, out, ms, _ = run("gate.py", {"prompt": "ayúdame a responder este correo:\n\
 check("big ctx new topic -> block clear", out and out.get("decision") == "block" and "/clear" in out["reason"], f"fresh={last_log().get('fresh')}")
 
 rc, out, ms, _ = run("gate.py", {"prompt": "sigue con el plan", "session_id": "s6", "transcript_path": transcript(320_000, idle_min=180)})
-check("cold 320k -> block", out and out.get("decision") == "block" and "caché" in out["reason"])
+check("cold 320k -> block", out and out.get("decision") == "block" and "cach" in out["reason"])
 
 rc, out, ms, _ = run("gate.py", {"prompt": "sigue", "session_id": "s7", "transcript_path": transcript(800_000, compacted=True)})
 check("after compact boundary no block", not (out and out.get("decision") == "block"))
