@@ -76,6 +76,21 @@ From a local clone:
 
 The plugin takes effect from the next session.
 
+### Claude Desktop app (Code tab)
+
+Tacaño runs in the desktop app's **Code** tab, in local sessions. It doesn't run in the Chat or Cowork tabs, cloud sessions, or WSL sessions.
+
+1. **Register the marketplace once.** The app has no button for custom marketplaces. Use either:
+   - your shell: `claude plugin marketplace add Nicolas6879/tacano`
+   - or add this inside `extraKnownMarketplaces` in `~/.claude/settings.json`:
+     ```json
+     "tacano-marketplace": { "source": { "source": "github", "repo": "Nicolas6879/tacano" } }
+     ```
+2. **Install.** In a Code session, click **+** next to the prompt box, go to **Plugins → Add plugin**, pick **Tacaño** and choose the **user** scope.
+3. **Start a new session.** Manage it later under **+ → Plugins → Manage plugins**.
+
+If the app doesn't show the language picker, create `~/.tacano.json` with `{"lang": "es"}` or `{"lang": "en"}`.
+
 ## Configuration
 
 Create `config.json` in the plugin's data folder (`~/.claude/plugins/data/tacano-…/`) with only the keys you want to change:

@@ -71,6 +71,21 @@ Desde una copia local:
 
 El plugin empieza a funcionar en la siguiente sesión.
 
+### App de escritorio de Claude (pestaña Code)
+
+Tacaño funciona en la pestaña **Code** de la app de escritorio, en sesiones locales. No funciona en Chat ni en Cowork, ni en sesiones en la nube o en WSL.
+
+1. **Registra el marketplace una vez.** La app no tiene botón para marketplaces propios. Usa una de estas dos formas:
+   - en tu terminal: `claude plugin marketplace add Nicolas6879/tacano`
+   - o agrega esto dentro de `extraKnownMarketplaces` en `~/.claude/settings.json`:
+     ```json
+     "tacano-marketplace": { "source": { "source": "github", "repo": "Nicolas6879/tacano" } }
+     ```
+2. **Instala.** En una sesión de Code, pulsa **+** junto al cuadro del prompt, ve a **Plugins → Add plugin**, elige **Tacaño** y el alcance **user**.
+3. **Abre una sesión nueva.** Después lo gestionas en **+ → Plugins → Manage plugins**.
+
+Si la app no muestra el selector de idioma, crea `~/.tacano.json` con `{"lang": "es"}` o `{"lang": "en"}`.
+
 ## Configuración
 
 Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/tacano-…/`) solo con las claves que quieras cambiar:
