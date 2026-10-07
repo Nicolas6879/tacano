@@ -163,6 +163,16 @@ s = jevlib.jev_state("usa esta key " + "sk-" + "ant-api03-AAAABBBBCCCCDDDD y TYP
 blob = json.dumps(s)
 check("redaction", "sk-ant" not in blob and "apikeyXYZ" not in blob and "ghp_" not in blob and "hunter2" not in blob, blob[:160])
 
+big = transcript(600_000)
+rc, out, ms, _ = run("gate.py", {"prompt": "<agent-message from=\"a1\">\n[Subagent hand-back] report", "session_id": "s20", "transcript_path": big})
+check("worker report never blocked", out is None)
+rc, out, ms, _ = run("gate.py", {"prompt": "<task-notification>\n<task-id>x</task-id>", "session_id": "s20", "transcript_path": big})
+check("task notification never blocked", out is None)
+rc, out, ms, _ = run("gate.py", {"prompt": "arregla el login", "prompt_id": "p1", "session_id": "s21", "transcript_path": big})
+check("human prompt at 600k blocks", out and out.get("decision") == "block")
+rc, out, ms, _ = run("gate.py", {"prompt": "otro texto del mismo turno", "prompt_id": "p1", "session_id": "s21", "transcript_path": big})
+check("same prompt_id (machine turn) skipped", out is None)
+
 cfg = {**jevlib.DEFAULTS, "compact_at_tokens": 60_000}
 newtask = {"boundary": {"noul": 0.95}, "fresh": {"probabilities": {"fresh_ok": 0.1}}}
 check("cheap boundary not worth a block (116k)", jevlib.compact_decision(cfg, 116_000, False, newtask) is None)

@@ -47,6 +47,10 @@ MSG = {
 }
 
 
+# Turns written by the harness, not the user: worker reports, background-task notices.
+MACHINE_PREFIXES = ("<agent-message", "<task-notification")
+
+
 def main():
     t0 = time.perf_counter()
     inp = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
@@ -54,13 +58,18 @@ def main():
     if not cfg.get("enabled", True):
         return
     prompt, sid = inp.get("prompt") or "", inp.get("session_id") or "nosession"
-    if not prompt.strip() or prompt.lstrip().startswith("/"):
+    if not prompt.strip() or prompt.lstrip().startswith(("/",) + MACHINE_PREFIXES):
         return
+    st = J.load_state(sid)
+    # Subagent reports and task notifications arrive as extra turns of the same human prompt (same prompt_id).
+    pid = inp.get("prompt_id")
+    if pid and pid == st.get("last_prompt_id"):
+        return
+    st["last_prompt_id"] = pid
     m = MSG.get(cfg["lang"], MSG["en"])
     info = J.read_transcript(inp.get("transcript_path"))
     ctx = info["ctx"]
     cold = info["idle_min"] is not None and info["idle_min"] > cfg["cold_after_minutes"]
-    st = J.load_state(sid)
     rec = {"session": sid, "ctx": ctx, "cold": cold, "prompt_hash": J.h(prompt), "prompt_len": len(prompt)}
 
     # Same prompt resent shortly after a block = explicit override.
