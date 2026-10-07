@@ -98,7 +98,7 @@ def simulate(cfg, delegate=True, quality_on=True, policy=True):
     tot = 0; st = collections.Counter(); misses = []; needs = []
     after_base = 60_000 + cfg["handoff_budget_chars"] // 3.5 + 25_000
     for sid, sess in S.items():
-        sess.sort(key=lambda t: t["turn_idx"]); offset = 0; prev_cut = None
+        sess.sort(key=lambda t: t["turn_idx"]); offset = 0; prev_cut = None; floor = 0
         for t in sess:
             calls = t["calls"]; ctx0, cw0 = calls[0][0], calls[0][1]
             cold = cw0 > 0.5 * ctx0
@@ -106,17 +106,17 @@ def simulate(cfg, delegate=True, quality_on=True, policy=True):
             eff0 = ctx0 - offset
             a = A.get(key(t)) if policy else None
             a = a if a and "error" not in a else None
-            dec = J.compact_decision(cfg, eff0, cold, a) if policy else None
+            dec = J.compact_decision(cfg, eff0, cold, a, 0, floor) if policy else None
             if dec:
                 kind, why = dec; st["block_" + kind] += 1; st["why_" + why] += 1
                 if kind == "clear":
-                    tot += 45_000 * o["write"]; offset = ctx0 - 45_000; prev_cut = t["turn_idx"]
+                    tot += 45_000 * o["write"]; offset = ctx0 - 45_000; prev_cut = t["turn_idx"]; floor = 45_000
                 else:
                     tot += (eff0 * o["write"] if cold else eff0 * o["read"]) + 10_000 * o["out"] + after_base * o["write"]
                     if quality_on:
                         q = quality(sid, t["turn_idx"], prev_cut, cfg["handoff_budget_chars"], cfg["handoff_recent_share"])
                         if q and q[0]: needs.append(q[0]); misses.append(q[1])
-                    offset = ctx0 - after_base; prev_cut = t["turn_idx"]
+                    offset = ctx0 - after_base; prev_cut = t["turn_idx"]; floor = after_base
                 cold = False; eff0 = ctx0 - offset
             worker = None
             if delegate and a:

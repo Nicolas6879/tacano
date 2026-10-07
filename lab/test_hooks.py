@@ -163,6 +163,15 @@ s = jevlib.jev_state("usa esta key " + "sk-" + "ant-api03-AAAABBBBCCCCDDDD y TYP
 blob = json.dumps(s)
 check("redaction", "sk-ant" not in blob and "apikeyXYZ" not in blob and "ghp_" not in blob and "hunter2" not in blob, blob[:160])
 
+cfg = {**jevlib.DEFAULTS, "compact_at_tokens": 60_000}
+newtask = {"boundary": {"noul": 0.95}, "fresh": {"probabilities": {"fresh_ok": 0.1}}}
+check("cheap boundary not worth a block (116k)", jevlib.compact_decision(cfg, 116_000, False, newtask) is None)
+newtopic = {"boundary": {"noul": 0.95}, "fresh": {"probabilities": {"fresh_ok": 1.0}}}
+check("cheap /clear not worth a block (78k)", jevlib.compact_decision(cfg, 78_000, False, newtopic) is None)
+check("big boundary still blocks (400k)", jevlib.compact_decision(cfg, 400_000, False, newtask) == ("compact", "boundary"))
+check("gap since last compaction (floor 300k)", jevlib.compact_decision(cfg, 400_000, False, newtask, 0, 300_000) is None)
+check("hard cap ignores gap", jevlib.compact_decision(cfg, 600_000, False, newtask, 0, 500_000) == ("compact", "hard"))
+
 logtxt = (TMP / "data" / "decisions.jsonl").read_text(encoding="utf-8")
 check("log has no prompt text", "Acme" not in logtxt and "private key" not in logtxt)
 print(f"\n{ok} passed, {fail} failed. data={TMP}")

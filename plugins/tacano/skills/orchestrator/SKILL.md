@@ -19,7 +19,7 @@ It means Jev judged the request as heavy execution and the expected saving of de
 Default to working inline. Delegate on your own only when you foresee ≥10 tool calls of mechanical execution.
 
 ## Blocks
-The gate blocks a prompt only when the session context is large: at a task boundary from 250k, always from 550k, or ≥300k with an expired cache. The user decides: `/compact`, `/clear`, or resend the same message to continue. After a compact/clear, a `[tacano]` note restores the held-back message — handle it when the user says "sigue"/"continue". After any compaction (manual or auto) a `[tacano]` block of VERBATIM excerpts (recent history + earlier decisions/values) is injected: treat it as exact and prefer it over the summary when they disagree.
+The gate blocks a prompt only when the session context is large: at a task boundary from 250k, always from 550k, or ≥300k with an expired cache. The user decides: `/compact`, `/clear`, or resend the same message to continue. After a compact/clear, a `[tacano]` note restores the held-back message. The user is asked to resend it: handle it exactly once; if they only say "sigue"/"continue", that held-back message is the task, not whatever came before. After any compaction (manual or auto) a `[tacano]` block of VERBATIM excerpts (recent history + earlier decisions/values) is injected: treat it as exact and prefer it over the summary when they disagree.
 
 ## Keep the context lean
 - Prefer Grep/targeted reads over reading whole large files; don't paste big outputs back.

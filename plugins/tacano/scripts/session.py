@@ -1,6 +1,6 @@
 """SessionStart hook.
 - After /compact (manual or auto): re-inject the verbatim handoff saved by precompact.py.
-- After /compact or /clear triggered by the gate: restore the user's pending message so they only type 'sigue'.
+- After /compact or /clear triggered by the gate: restore the user's pending message (they resend it; a short 'sigue' also works).
 - On resume with an expired cache and a big context: warn the user before they spend the rewrite."""
 import json
 import sys
@@ -40,11 +40,13 @@ def main():
             J.log({"action": "handoff_injected", "chars": len(parts[-1])})
         if st.get("pending_prompt") and time.time() - st.get("pending_at", 0) < 3600:
             note = ("[tacano] Justo antes de este {src}, el usuario envió este mensaje (quedó en espera). "
-                    "Si su próximo mensaje es corto ('sigue', 'dale', 'ok'), atiende este pedido:\n\n{p}"
+                    "Se le pidió reenviarlo: si lo reenvía, atiéndelo una sola vez. Si en cambio escribe algo corto "
+                    "('sigue', 'dale', 'ok'), lo que debes hacer ahora es este pedido, no la tarea anterior:\n\n{p}"
                     if es else
                     "[tacano] Right before this {src}, the user sent this message (held back). "
-                    "If their next message is short ('continue', 'ok'), handle this request:\n\n{p}")
-            parts.append(note.format(src="/" + src, p=st["pending_prompt"]))
+                    "They were asked to resend it: if they do, handle it once. If they instead write something short "
+                    "('continue', 'ok'), this request is what to do now, not the previous task:\n\n{p}")
+            parts.insert(0, note.format(src="/" + src, p=st["pending_prompt"]))
             st.update(pending_prompt=None, blocked_hash=None)
             J.save_state(sid, st)
             J.log({"action": "restore_pending", "source": src})

@@ -11,7 +11,10 @@ import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA") or (pathlib.Path.home() / ".claude" / "tacano-data"))
+# Hooks get CLAUDE_PLUGIN_DATA; when run by hand (report.py) fall back to the installed plugin's data folder.
+DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA")
+                    or next(iter(sorted((pathlib.Path.home() / ".claude" / "plugins" / "data").glob("tacano-*"))), None)
+                    or (pathlib.Path.home() / ".claude" / "tacano-data"))
 DATA.mkdir(parents=True, exist_ok=True)
 
 DEFAULTS = {
@@ -31,6 +34,10 @@ DEFAULTS = {
     "min_expected_saving_usd": 0.05,
     "override_window_minutes": 20,     # resend the same prompt within this window to bypass a block
     "snooze_tokens": 100_000,          # after a bypass, don't block again until context grows this much
+    "min_block_saving_usd": 0.50,      # boundary blocks only when compacting/clearing is expected to save at least this
+    "block_horizon_calls": 80,         # calls assumed ahead in the session when pricing a boundary block
+    "block_gap_tokens": 150_000,       # boundary blocks need the context to grow this much since the last compaction
+    "clear_base_tokens": 45_000,       # fresh-session context after /clear
     "jev_timeout_s": 4.0,
     "enabled": True,
     # $/MTok; 1h cache writes = 2x input. Opus/Sonnet 5.5: claude-api skill (2026-09-25).
@@ -243,8 +250,22 @@ def resume_cost(cfg, ctx, cold):
 
 
 # ---------- compaction policy ----------
-def compact_decision(cfg, ctx, cold, answers, snooze_until=0):
-    """Return None, or (kind, why) with kind in {"compact","clear"} and why in {"cold","hard","boundary"}."""
+def switch_saving(cfg, ctx, kind, answers=None):
+    """Expected $ saved by /compact or /clear now vs carrying the context: cheaper calls ahead minus the switch cost."""
+    o = cfg["prices"]["opus"]
+    if kind == "clear":
+        after, cost = cfg["clear_base_tokens"], cfg["clear_base_tokens"] * o["write"]
+    else:
+        after = 85_000 + cfg["handoff_budget_chars"] / 3.5   # summary + system + handoff + re-reads
+        cost = ctx * o["read"] + 10_000 * o["out"] + after * o["write"]
+    vol = ((answers or {}).get("volume") or {}).get("probabilities") or {}
+    ahead = cfg["block_horizon_calls"] + sum(p * cfg["calls_per_bucket"].get(b, 0) for b, p in vol.items())
+    return (max(0, ctx - after) * o["read"] * ahead - cost) / 1e6
+
+
+def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0):
+    """Return None, or (kind, why) with kind in {"compact","clear"} and why in {"cold","hard","boundary"}.
+    floor = context size right after the last compaction (0 if none)."""
     if ctx < snooze_until:
         return None
     a = answers or {}
@@ -255,7 +276,9 @@ def compact_decision(cfg, ctx, cold, answers, snooze_until=0):
         return kind, "cold"
     if ctx >= cfg["hard_compact_at_tokens"]:
         return kind, "hard"
-    if ctx >= cfg["compact_at_tokens"] and (boundary >= cfg["boundary_threshold"] or kind == "clear"):
+    if (ctx >= cfg["compact_at_tokens"] and (boundary >= cfg["boundary_threshold"] or kind == "clear")
+            and ctx - floor >= cfg["block_gap_tokens"]
+            and switch_saving(cfg, ctx, kind, a) >= cfg["min_block_saving_usd"]):
         return kind, "boundary"
     return None
 

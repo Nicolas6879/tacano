@@ -13,10 +13,10 @@ MSG = {
     "es": {
         "clear": ("[tacano] 🪙 Modo tacaño: esto parece un tema nuevo y la sesión ya carga {ctx}k tokens{cold}. "
                   "Seguir aquí cuesta ~${now:.2f} solo en releer el contexto, y cada respuesta lo vuelve a leer. "
-                  "Usa /clear (o una sesión nueva) y vuelve a enviar el mensaje: tras /clear te lo recuerdo. "
+                  "Usa /clear (o una sesión nueva) y vuelve a enviar el mensaje (flecha ↑). "
                   "Para seguir aquí igualmente, reenvía el mismo mensaje."),
         "compact": ("[tacano] 🪙 Modo tacaño: {why}la sesión carga {ctx}k tokens{cold}; cada respuesta relee todo eso (~${now:.2f} por llamada{cw}). "
-                    "Ejecuta /compact y luego escribe 'sigue': retomo tu mensaje automáticamente. "
+                    "Ejecuta /compact y luego reenvía tu mensaje (flecha ↑). "
                     "Para seguir sin compactar, reenvía el mismo mensaje."),
         "cold": " y el caché expiró (reanudar reescribe todo)",
         "cw": "; esta primera, al estar frío, ~${first:.2f}",
@@ -30,10 +30,10 @@ MSG = {
     "en": {
         "clear": ("[tacano] 🪙 Being stingy: this looks like a new topic and the session already carries {ctx}k tokens{cold}. "
                   "Continuing here costs ~${now:.2f} just to re-read context, on every response. "
-                  "Run /clear (or open a new session) and resend; after /clear I'll remind Claude of your message. "
+                  "Run /clear (or open a new session) and resend your message (up arrow). "
                   "To continue here anyway, resend the same message."),
         "compact": ("[tacano] 🪙 Being stingy: {why}the session carries {ctx}k tokens{cold}; every response re-reads it (~${now:.2f} per call{cw}). "
-                    "Run /compact, then type 'continue': your message is restored automatically. "
+                    "Run /compact, then resend your message (up arrow). "
                     "To continue without compacting, resend the same message."),
         "cold": " and the cache expired (resuming rewrites all of it)",
         "cw": "; this first one, being cold, ~${first:.2f}",
@@ -81,7 +81,12 @@ def main():
         err = rec["jev_error"] = str(e)[:200]
 
     out = {}
-    dec = None if override else J.compact_decision(cfg, ctx, cold, answers, st.get("snooze_until_ctx", 0))
+    # A sharp drop in context means a compaction happened: remember its size for the block gap.
+    if ctx:
+        if ctx < 0.6 * st.get("last_ctx", 0):
+            st["floor"] = ctx
+        st["last_ctx"] = ctx
+    dec = None if override else J.compact_decision(cfg, ctx, cold, answers, st.get("snooze_until_ctx", 0), st.get("floor", 0))
     if dec:
         kind, why = dec
         now = J.resume_cost(cfg, ctx, False)

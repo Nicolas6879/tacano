@@ -22,7 +22,7 @@ En cada prompt, un hook le hace a Jev 7 preguntas tipadas en un solo request: vo
 
 | Situación | Acción |
 |---|---|
-| Contexto ≥250k **y** Jev detecta que empiezas una tarea nueva, o contexto ≥550k, o caché vencido con ≥300k | Bloquea el prompt (0 tokens) y sugiere `/compact`, o `/clear` si el pedido no necesita el historial. Después escribes "sigue" y tu mensaje se restaura solo. Para saltarte el bloqueo, reenvía el mismo mensaje. |
+| Contexto ≥250k **y** Jev detecta que empiezas una tarea nueva (solo si cambiar ahorra ≥$0.50, y máximo una vez por cada 150k de crecimiento), o contexto ≥550k, o caché vencido con ≥300k | Bloquea el prompt (0 tokens) y sugiere `/compact`, o `/clear` si el pedido no necesita el historial. Después reenvías tu mensaje (flecha ↑). Para saltarte el bloqueo, reenvíalo sin compactar. |
 | Cualquier compactación (manual o automática) | `PreCompact` guarda ~13k tokens de extractos **literales** (lo más reciente + decisiones, restricciones y valores concretos) y `SessionStart` los reinyecta. |
 | Trabajo pesado (≥9 acciones previstas) con ahorro esperado > $0.05 | Pista para Opus: delega la ejecución en `sonnet-worker` o `haiku-worker` (agentes con herramientas restringidas que arrancan livianos) y revisa el resultado. |
 | Opiniones, decisiones, secretos, firmas, pagos, publicaciones | Nunca se delegan. |
@@ -41,7 +41,7 @@ Replay de 500 turnos reales, llamada por llamada, con el código del plugin y re
 | Interrupciones | 1 cada ~38 prompts |
 | Lo que sobrevive a una compactación | resumen solo: 50% → resumen + traspaso: ~85–95% |
 | Latencia del hook | p50 ~430 ms; `PreCompact` <1 s con un transcript de 26 MB |
-| Tests | 31/31 |
+| Tests | 39/39 |
 
 Qué se probó y se descartó:
 - **RTK**: perdía la información que Claude necesitaba después.
@@ -70,6 +70,16 @@ Desde una copia local:
 ```
 
 El plugin empieza a funcionar en la siguiente sesión.
+
+### Recomendado: que Opus orqueste de verdad
+
+Claude Code solo lanza subagentes cuando **tú** lo pides, así que por su cuenta Opus suele ignorar las pistas de delegación de Tacaño (medimos 0 de 2 seguidas). Ejecuta una vez:
+
+```
+/tacano:setup
+```
+
+Agrega una sección corta y marcada a tu `~/.claude/CLAUDE.md` diciendo que quieres que Opus planee, delegue la ejecución al trabajador `tacano:` sugerido y revise el resultado. Nunca delega opiniones, decisiones, secretos ni publicaciones. Revísalo con `/tacano:setup status` y quítalo con `/tacano:setup off`.
 
 ### App de escritorio de Claude (pestaña Code)
 
@@ -125,6 +135,7 @@ plugins/tacano/
   scripts/report.py                 mide el ahorro real
   agents/                           sonnet-worker, haiku-worker, haiku-browser-worker
   skills/orchestrator/          protocolo para Opus
+  skills/setup/ + scripts/setup.py  /tacano:setup, activar a Opus como orquestador
 lab/                                simulaciones y evaluación (usan TUS transcripts)
 ```
 
@@ -136,7 +147,7 @@ lab/                                simulaciones y evaluación (usan TUS transcr
 python lab/mine2.py && python lab/mine3.py      # extrae turnos
 python lab/final_sim.py fetch                   # respuestas de Jev a las preguntas del plugin
 python lab/final_sim.py grid                    # replay completo + grilla de ajuste
-python lab/test_hooks.py                        # 31 tests de casos límite
+python lab/test_hooks.py                        # 39 tests de casos límite
 ```
 
 ## Limitaciones
