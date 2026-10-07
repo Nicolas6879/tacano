@@ -1,0 +1,8 @@
+# Lab data derived from private transcripts: never publish
+lab/*.json
+lab/__pycache__/
+**/__pycache__/
+lab/_plugindata/
+*.bak*
+.env
+*.env

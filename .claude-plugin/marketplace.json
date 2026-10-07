@@ -1,0 +1,11 @@
+{
+  "name": "jev-router-marketplace",
+  "owner": { "name": "Nicolas6879" },
+  "plugins": [
+    {
+      "name": "jev-router",
+      "source": "./plugins/jev-router",
+      "description": "Opus orchestrates; Jev (TypeSafe) decides cheaply when to compact, clear or delegate to Sonnet/Haiku workers."
+    }
+  ]
+}

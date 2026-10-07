@@ -1,0 +1,25 @@
+def state(t):
+    return {"conversation": {"previous_user_message": (t["prev_prompt"] or "")[:300],
+                             "last_assistant_message": t["last_assistant"][-900:]},
+            "new_user_message": t["prompt"][:1500]}
+QUESTIONS = {
+ "volume": {"type":"choice",
+   "instructions":"A coding agent (Claude Code) with file, shell, web and browser tools receives `new_user_message` after `conversation`. Estimate how many tool actions it will take to fully handle it. If the message approves, answers or continues a plan proposed in `conversation.last_assistant_message` (e.g. 'sí', 'dale', a pasted value or path the agent asked for), count the tool actions of executing that plan.",
+   "criteria":{"none":"No tool use: answer from conversation or knowledge (opinion, explanation, short draft text, acknowledgement, stop).",
+               "few":"1 to 3 tool actions: check one thing, run one command, one quick lookup or one small edit.",
+               "moderate":"4 to 8 tool actions: small fix across a couple of files, short investigation, a few web lookups.",
+               "heavy":"9 or more tool actions: implementing or building a feature, multi-file changes, research across many sources, iterative debugging, testing loops, browsing many pages."}},
+ "intent": {"type":"choice",
+   "instructions":"What is the main kind of work `new_user_message` asks for, given `conversation`?",
+   "criteria":{"chat":"Opinion, explanation, advice, or drafting a reply/text without needing to inspect anything.",
+               "continue_plan":"Approves, confirms or supplies missing info so the agent continues work it already proposed or started.",
+               "lookup":"Check, find, read or run something specific and report back.",
+               "build":"Create or modify code, files, documents or configuration.",
+               "research":"Investigate a topic across multiple sources, docs or web pages and synthesize.",
+               "debug":"Diagnose and fix something that is failing or behaving wrong.",
+               "review":"Review or audit existing code, PR, document or data."}},
+ "independent": {"type":"noul",
+   "instructions":"Can `new_user_message` be handled correctly with no knowledge of `conversation` (it is a new, self-contained topic)?"},
+ "mechanical": {"type":"noul",
+   "instructions":"Is the requested work mechanical enough that a smaller, cheaper model given clear instructions would do it as well as the strongest model (searching, reading, running commands, collecting data, applying obvious edits, summarizing), rather than needing deep reasoning, architecture, subtle judgment or high-stakes decisions?"},
+}

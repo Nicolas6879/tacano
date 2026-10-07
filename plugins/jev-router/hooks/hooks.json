@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/gate.py\"", "timeout": 8 } ] }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/precompact.py\"", "timeout": 20 } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/session.py\"", "timeout": 5 } ] }
+    ]
+  }
+}

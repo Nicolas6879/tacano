@@ -1,0 +1,20 @@
+{
+  "name": "jev-router",
+  "displayName": "Jev Router",
+  "version": "0.1.0",
+  "description": "Token-saving gate for Claude Code: Jev (TypeSafe System One) judges each prompt so Opus compacts/clears oversized contexts and delegates heavy execution to cheap workers.",
+  "author": {
+    "name": "Nicolas6879"
+  },
+  "license": "MIT",
+  "keywords": [
+    "routing",
+    "cost",
+    "tokens",
+    "jev",
+    "typesafe",
+    "orchestrator"
+  ],
+  "repository": "https://github.com/Nicolas6879/jev-router",
+  "homepage": "https://github.com/Nicolas6879/jev-router"
+}
