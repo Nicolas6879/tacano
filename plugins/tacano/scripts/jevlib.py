@@ -33,10 +33,12 @@ DEFAULTS = {
     "snooze_tokens": 100_000,          # after a bypass, don't block again until context grows this much
     "jev_timeout_s": 4.0,
     "enabled": True,
-    # $/MTok; 1h cache writes = 2x input. Source: Anthropic pricing (claude-api skill, 2026-09-25).
+    # $/MTok; 1h cache writes = 2x input. Opus/Sonnet 5.5: claude-api skill (2026-09-25).
+    # Haiku 5.5 (2026-10-07) is tiered: prompts over 100k tokens bill at the "long" rates.
     "prices": {"opus": {"out": 20, "read": 0.20, "write": 8},
                "sonnet": {"out": 10, "read": 0.20, "write": 4},
-               "haiku": {"out": 5, "read": 0.10, "write": 2}},
+               "haiku": {"out": 0.50, "read": 0.01, "write": 0.20,
+                         "long_from": 100_000, "long": {"out": 2.50, "read": 0.05, "write": 1.00}}},
     # Calibrated on 500 real turns (lab/): calls per volume bucket, ctx growth per call, worker overheads.
     "calls_per_bucket": {"none": 1, "few": 2, "moderate": 5, "heavy": 17},
     "growth_per_call": 1600, "out_per_call": 450, "future_calls_cap": 52,
@@ -192,6 +194,11 @@ def ask_jev(state, questions, timeout):
 
 
 # ---------- cost model ----------
+def rates(p, prompt_tokens):
+    """Per-MTok rates for a call whose prompt is prompt_tokens long (handles tiered models)."""
+    return p["long"] if "long_from" in p and prompt_tokens > p["long_from"] else p
+
+
 def _turn_cost(cfg, ctx0, k, model, delegated):
     P = cfg["prices"]
     o, g, out = P["opus"], cfg["growth_per_call"], cfg["out_per_call"]
@@ -201,9 +208,11 @@ def _turn_cost(cfg, ctx0, k, model, delegated):
         return (c + g * max(0, k - 1) * fut * o["read"]) / 1e6
     s = P[model]
     c = 2 * ctx0 * o["read"] + cfg["dispatch_tokens"] * o["out"] + cfg["result_tokens"] * o["write"] + out * o["out"]
-    c += cfg["worker_base_tokens"] * s["write"]
+    c += cfg["worker_base_tokens"] * rates(s, cfg["worker_base_tokens"])["write"]
     for j in range(max(1, round(k * cfg["worker_call_factor"]))):
-        c += (cfg["worker_base_tokens"] + j * g) * s["read"] + g * s["write"] + out * s["out"]
+        wctx = cfg["worker_base_tokens"] + j * g
+        r = rates(s, wctx)
+        c += wctx * r["read"] + g * r["write"] + out * r["out"]
     return (c + cfg["result_tokens"] * fut * o["read"]) / 1e6
 
 

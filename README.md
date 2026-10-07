@@ -149,7 +149,7 @@ python lab/test_hooks.py                        # 31 edge-case tests
 - Short sessions (under 200k tokens) see little change. That's expected: there's not much to save there.
 - Handoff quality was measured with a proxy: paths, URLs, IDs and identifiers reused after compaction.
 - The delegation hint is advice, not enforcement. `report.py` measures how often Opus follows it.
-- Prices are pinned to 2026-09-25 (the `prices` key in the configuration).
+- Prices are pinned to 2026-09-25 for Opus/Sonnet 5.5 and 2026-10-07 for Haiku 5.5, including its 100k-token tier (the `prices` key in the configuration).
 
 ## License
 

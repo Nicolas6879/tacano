@@ -10,18 +10,26 @@ import sys
 
 import jevlib as J
 
-PRICES = {"opus": (4, 20, 0.20, 8), "sonnet": (2, 10, 0.20, 4), "haiku": (1, 5, 0.10, 2), "fable": (10, 50, 0.25, 20)}  # in,out,read,write(1h)
+PRICES = {"opus": (4, 20, 0.20, 8), "sonnet": (2, 10, 0.20, 4), "haiku-4": (1, 5, 0.10, 2),
+          "haiku": (0.10, 0.50, 0.01, 0.20), "fable": (10, 50, 0.25, 20)}  # in,out,read,write(1h)
+HAIKU_LONG = (0.50, 2.50, 0.05, 1.00)  # Haiku 5.5, prompts over 100k tokens
 
 
-def price(model):
+def price(model, prompt_tokens=0):
+    m = model or ""
+    if "haiku-4" in m:
+        return PRICES["haiku-4"]
+    if "haiku" in m:
+        return HAIKU_LONG if prompt_tokens > 100_000 else PRICES["haiku"]
     for k, v in PRICES.items():
-        if k in (model or ""):
+        if k in m:
             return v
     return PRICES["opus"]
 
 
 def cost(u, model):
-    i, o, r, w = price(model)
+    prompt = sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+    i, o, r, w = price(model, prompt)
     return ((u.get("input_tokens") or 0) * i + (u.get("output_tokens") or 0) * o
             + (u.get("cache_read_input_tokens") or 0) * r + (u.get("cache_creation_input_tokens") or 0) * w) / 1e6
 

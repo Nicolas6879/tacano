@@ -144,7 +144,7 @@ python lab/test_hooks.py                        # 31 tests de casos límite
 - En sesiones cortas (menos de 200k tokens) casi no interviene. Es lo esperado: ahí hay poco que ahorrar.
 - La calidad del traspaso se midió con un proxy: rutas, URLs, IDs e identificadores reutilizados después de compactar.
 - La pista de delegación es un consejo. `report.py` mide cuánto la sigue Opus.
-- Los precios están fijados al 2026-09-25 (clave `prices` en la configuración).
+- Los precios están fijados al 2026-09-25 para Opus/Sonnet 5.5 y al 2026-10-07 para Haiku 5.5, con su tramo de 100k tokens (clave `prices` en la configuración).
 
 ## Licencia
 
