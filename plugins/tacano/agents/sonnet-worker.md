@@ -1,6 +1,6 @@
 ---
 name: sonnet-worker
-description: Execution worker for engineering work delegated by the orchestrator — implement features, multi-file edits, debugging loops, scripts, code/data analysis, multi-source research. Use when a jev-router hint suggests sonnet, or for any tool-heavy task whose plan is already decided.
+description: Execution worker for engineering work delegated by the orchestrator — implement features, multi-file edits, debugging loops, scripts, code/data analysis, multi-source research. Use when a tacano hint suggests sonnet, or for any tool-heavy task whose plan is already decided.
 model: sonnet
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch, TodoWrite
 ---

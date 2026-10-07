@@ -4,7 +4,7 @@ usage: python final_sim.py fetch   -> cache Jev answers for all turns (plugin qu
        python final_sim.py grid    -> tune thresholds / handoff budget"""
 import json, glob, pathlib, sys, collections, concurrent.futures as cf, itertools, os, re
 LAB = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(LAB.parent / "plugins" / "jev-router" / "scripts"))
+sys.path.insert(0, str(LAB.parent / "plugins" / "tacano" / "scripts"))
 os.environ.setdefault("CLAUDE_PLUGIN_DATA", str(LAB / "_plugindata"))
 import jevlib as J
 from costsim import P, SUB_BASE, DISPATCH_OUT, RESULT, ALPHA

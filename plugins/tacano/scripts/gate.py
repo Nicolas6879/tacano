@@ -11,36 +11,36 @@ import jevlib as J
 
 MSG = {
     "es": {
-        "clear": ("[jev-router] Esto parece un tema nuevo y la sesión ya carga {ctx}k tokens{cold}. "
+        "clear": ("[tacano] Esto parece un tema nuevo y la sesión ya carga {ctx}k tokens{cold}. "
                   "Seguir aquí cuesta ~${now:.2f} solo en releer el contexto, y cada respuesta lo vuelve a leer. "
                   "Usa /clear (o una sesión nueva) y vuelve a enviar el mensaje: tras /clear te lo recuerdo. "
                   "Para seguir aquí igualmente, reenvía el mismo mensaje."),
-        "compact": ("[jev-router] {why}La sesión carga {ctx}k tokens{cold}; cada respuesta relee todo eso (~${now:.2f} por llamada{cw}). "
+        "compact": ("[tacano] {why}La sesión carga {ctx}k tokens{cold}; cada respuesta relee todo eso (~${now:.2f} por llamada{cw}). "
                     "Ejecuta /compact y luego escribe 'sigue': retomo tu mensaje automáticamente. "
                     "Para seguir sin compactar, reenvía el mismo mensaje."),
         "cold": " y el caché expiró (reanudar reescribe todo)",
         "cw": "; esta primera, al estar frío, ~${first:.2f}",
         "why_boundary": "Buen momento para compactar: parece que empiezas una tarea nueva. ",
         "kept": " Al compactar guardo extractos literales de lo reciente y de las decisiones clave.",
-        "hint": ("[jev-router] Jev estima trabajo de ejecución {vol} (P={p:.2f}), apto para {worker}. Política: decide/planea tú; "
-                 "delega la ejecución con Agent(subagent_type=\"jev-router:{worker}-worker\") y un brief autocontenido "
+        "hint": ("[tacano] Jev estima trabajo de ejecución {vol} (P={p:.2f}), apto para {worker}. Política: decide/planea tú; "
+                 "delega la ejecución con Agent(subagent_type=\"tacano:{worker}-worker\") y un brief autocontenido "
                  "(rutas, objetivo, criterios de aceptación); revisa el resultado. Ahorro esperado ≈ ${ev:.2f}. "
                  "Si la petición es sobre todo opinión o decisión, ignora esta pista."),
     },
     "en": {
-        "clear": ("[jev-router] This looks like a new topic and the session already carries {ctx}k tokens{cold}. "
+        "clear": ("[tacano] This looks like a new topic and the session already carries {ctx}k tokens{cold}. "
                   "Continuing here costs ~${now:.2f} just to re-read context, on every response. "
                   "Run /clear (or open a new session) and resend; after /clear I'll remind Claude of your message. "
                   "To continue here anyway, resend the same message."),
-        "compact": ("[jev-router] {why}The session carries {ctx}k tokens{cold}; every response re-reads it (~${now:.2f} per call{cw}). "
+        "compact": ("[tacano] {why}The session carries {ctx}k tokens{cold}; every response re-reads it (~${now:.2f} per call{cw}). "
                     "Run /compact, then type 'continue': your message is restored automatically. "
                     "To continue without compacting, resend the same message."),
         "cold": " and the cache expired (resuming rewrites all of it)",
         "cw": "; this first one, being cold, ~${first:.2f}",
         "why_boundary": "Good moment to compact: you seem to be starting a new task. ",
         "kept": " On compaction I keep verbatim excerpts of recent history and key decisions.",
-        "hint": ("[jev-router] Jev estimates {vol} execution work (P={p:.2f}), suitable for {worker}. Policy: you decide/plan; "
-                 "delegate execution with Agent(subagent_type=\"jev-router:{worker}-worker\") and a self-contained brief "
+        "hint": ("[tacano] Jev estimates {vol} execution work (P={p:.2f}), suitable for {worker}. Policy: you decide/plan; "
+                 "delegate execution with Agent(subagent_type=\"tacano:{worker}-worker\") and a self-contained brief "
                  "(paths, goal, acceptance criteria); review the result. Expected saving ≈ ${ev:.2f}. "
                  "If the request is mostly opinion or a decision, ignore this hint."),
     },

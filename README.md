@@ -1,8 +1,15 @@
-# jev-router
+# Tacaño 🪙
 
-**Plugin para Claude Code que ahorra ~39% del costo de tokens sin tocar la calidad: Opus orquesta y [Jev](https://docs.typesafe.ai) (TypeSafe System One) toma las decisiones baratas.**
+**Tu Claude, pero tacaño con los tokens.** ~39% menos gasto en Claude Code, mismo Opus.
 
-> **English summary.** A Claude Code plugin that cuts token spend by ~39% (35% under pessimistic assumptions), measured by replaying 500 real Claude Code turns with the plugin's own code. Opus stays the orchestrator. On every prompt, a hook asks Jev, a decision-only model (~400 ms, ~$0.00007 per call), whether to: (1) suggest `/compact` or `/clear` at a natural task boundary once the context is large, (2) preserve verbatim excerpts across compaction so the summary doesn't lose key details, or (3) hint Opus to delegate heavy tool-loops to cheap Sonnet/Haiku workers. Everything else passes through silently. See [English quick start](#english-quick-start).
+```
+/plugin marketplace add Nicolas6879/tacano
+/plugin install tacano@tacano-marketplace
+```
+
+Opus orquesta y [Jev](https://docs.typesafe.ai) (TypeSafe System One), un modelo que solo toma decisiones, decide en ~400 ms y por ~$0.00007 cuándo compactar, qué conservar y qué delegar a trabajadores baratos.
+
+> **English summary.** *Tacaño* is Spanish for "stingy": a Claude Code plugin that cuts token spend by ~39% (35% under pessimistic assumptions), measured by replaying 500 real Claude Code turns with the plugin's own code. Opus stays the orchestrator. On every prompt, a hook asks Jev, a decision-only model (~400 ms, ~$0.00007 per call), whether to: (1) suggest `/compact` or `/clear` at a natural task boundary once the context is large, (2) preserve verbatim excerpts across compaction so the summary doesn't lose key details, or (3) hint Opus to delegate heavy tool-loops to cheap Sonnet/Haiku workers. Everything else passes through silently. See [English quick start](#english-quick-start).
 
 ## El problema
 
@@ -50,34 +57,34 @@ Requisitos:
 Desde GitHub:
 
 ```
-/plugin marketplace add Nicolas6879/jev-router
-/plugin install jev-router@jev-router-marketplace
+/plugin marketplace add Nicolas6879/tacano
+/plugin install tacano@tacano-marketplace
 ```
 
 Desde una copia local:
 
 ```
-/plugin marketplace add /ruta/a/jev-router
-/plugin install jev-router@jev-router-marketplace
+/plugin marketplace add /ruta/a/tacano
+/plugin install tacano@tacano-marketplace
 ```
 
 El plugin empieza a funcionar en la siguiente sesión.
 
 ## Configuración
 
-Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/jev-router-…/`) solo con las claves que quieras cambiar:
+Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/tacano-…/`) solo con las claves que quieras cambiar:
 
 ```json
 { "lang": "en", "compact_at_tokens": 250000, "hard_compact_at_tokens": 550000, "cold_compact_at_tokens": 300000,
   "boundary_threshold": 0.7, "handoff_budget_chars": 48000, "enabled": true }
 ```
 
-Todas las claves y sus valores por defecto están en `plugins/jev-router/scripts/jevlib.py` (`DEFAULTS`).
+Todas las claves y sus valores por defecto están en `plugins/tacano/scripts/jevlib.py` (`DEFAULTS`).
 
 ## Medir el ahorro real
 
 ```
-python plugins/jev-router/scripts/report.py
+python plugins/tacano/scripts/report.py
 ```
 
 Compara el costo por prompt antes y después de instalar (desde tus transcripts locales, subagentes incluidos). También cuenta bloqueos, overrides y traspasos, y muestra si Opus siguió las pistas de delegación.
@@ -92,7 +99,7 @@ Compara el costo por prompt antes y después de instalar (desde tus transcripts 
 
 ```
 .claude-plugin/marketplace.json     marketplace (este repo)
-plugins/jev-router/
+plugins/tacano/
   .claude-plugin/plugin.json
   hooks/hooks.json                  UserPromptSubmit, PreCompact, SessionStart
   scripts/jevlib.py                 config, cliente Jev, política, costos, traspaso
@@ -101,7 +108,7 @@ plugins/jev-router/
   scripts/session.py                reinyecta el traspaso y el mensaje pendiente
   scripts/report.py                 mide el ahorro real
   agents/                           sonnet-worker, haiku-worker, haiku-browser-worker
-  skills/jev-orchestrator/          protocolo para Opus
+  skills/orchestrator/          protocolo para Opus
 lab/                                simulaciones y evaluación (usan TUS transcripts)
 ```
 
@@ -126,8 +133,8 @@ python lab/test_hooks.py                        # 31 tests de casos límite
 ## English quick start
 
 ```
-/plugin marketplace add Nicolas6879/jev-router
-/plugin install jev-router@jev-router-marketplace
+/plugin marketplace add Nicolas6879/tacano
+/plugin install tacano@tacano-marketplace
 ```
 
 1. Set `TYPESAFE_API_KEY`, or add a line to `~/.typesafe.env`.

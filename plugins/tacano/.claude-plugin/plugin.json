@@ -1,0 +1,23 @@
+{
+  "name": "tacano",
+  "displayName": "Tacaño",
+  "version": "0.1.0",
+  "description": "Tacaño (Spanish for 'stingy') makes Claude Code stingy with tokens: ~39% less spend, same Opus. Jev-powered compaction timing, verbatim handoff across /compact and cheap-worker delegation.",
+  "author": {
+    "name": "Nicolas6879"
+  },
+  "license": "MIT",
+  "keywords": [
+    "tokens",
+    "save-tokens",
+    "cost",
+    "compaction",
+    "context",
+    "routing",
+    "jev",
+    "typesafe",
+    "opus"
+  ],
+  "repository": "https://github.com/Nicolas6879/tacano",
+  "homepage": "https://github.com/Nicolas6879/tacano"
+}

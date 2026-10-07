@@ -1,6 +1,6 @@
 """Run the real gate.py on real transcripts cut right before each human prompt. Measures latency, block/hint rates."""
 import json, glob, os, pathlib, random, subprocess, sys, tempfile, time, collections, statistics as st
-PLUG = pathlib.Path(__file__).resolve().parent.parent / "plugins" / "jev-router" / "scripts"
+PLUG = pathlib.Path(__file__).resolve().parent.parent / "plugins" / "tacano" / "scripts"
 ROOT = pathlib.Path.home() / ".claude" / "projects"
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="jevreplay-"))
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 120

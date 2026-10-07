@@ -39,10 +39,10 @@ def main():
             hf.unlink()
             J.log({"action": "handoff_injected", "chars": len(parts[-1])})
         if st.get("pending_prompt") and time.time() - st.get("pending_at", 0) < 3600:
-            note = ("[jev-router] Justo antes de este {src}, el usuario envió este mensaje (quedó en espera). "
+            note = ("[tacano] Justo antes de este {src}, el usuario envió este mensaje (quedó en espera). "
                     "Si su próximo mensaje es corto ('sigue', 'dale', 'ok'), atiende este pedido:\n\n{p}"
                     if es else
-                    "[jev-router] Right before this {src}, the user sent this message (held back). "
+                    "[tacano] Right before this {src}, the user sent this message (held back). "
                     "If their next message is short ('continue', 'ok'), handle this request:\n\n{p}")
             parts.append(note.format(src="/" + src, p=st["pending_prompt"]))
             st.update(pending_prompt=None, blocked_hash=None)
@@ -54,11 +54,11 @@ def main():
         ctx = inp.get("context_tokens") or 0
         usd = inp.get("estimated_cache_write_usd")
         if ctx >= cfg["cold_compact_at_tokens"]:
-            msg = (f"[jev-router] Esta sesión reanuda {ctx // 1000}k tokens con el caché vencido"
+            msg = (f"[tacano] Esta sesión reanuda {ctx // 1000}k tokens con el caché vencido"
                    f"{f' (~${usd:.2f} solo en reescribirlo)' if usd else ''}. Si vas a seguir el mismo tema, /compact primero; "
                    "si es otro tema, abre una sesión nueva."
                    if es else
-                   f"[jev-router] Resuming {ctx // 1000}k tokens with an expired cache"
+                   f"[tacano] Resuming {ctx // 1000}k tokens with an expired cache"
                    f"{f' (~${usd:.2f} just to rewrite it)' if usd else ''}. Same topic: /compact first; new topic: new session.")
             out = {"systemMessage": msg}
             J.log({"action": "warn_cold_resume", "ctx": ctx, "usd": usd})

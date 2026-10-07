@@ -1,6 +1,6 @@
 ---
 name: haiku-worker
-description: Cheap execution worker for fully specified, judgment-free tasks — run commands or services, search/collect/read and report facts, apply trivial specified edits. Use when a jev-router hint suggests haiku.
+description: Cheap execution worker for fully specified, judgment-free tasks — run commands or services, search/collect/read and report facts, apply trivial specified edits. Use when a tacano hint suggests haiku.
 model: haiku
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch
 ---

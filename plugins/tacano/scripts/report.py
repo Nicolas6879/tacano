@@ -1,5 +1,5 @@
 """Measure real effect after install: $ per human prompt before vs after, block/override rates, hint follow-through.
-usage: python report.py [--since YYYY-MM-DD]   (default: date of the first jev-router decision)"""
+usage: python report.py [--since YYYY-MM-DD]   (default: date of the first tacano decision)"""
 import collections
 import datetime as dt
 import glob
@@ -80,7 +80,7 @@ def main():
                     ts = dt.datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00"))
                     usd["after" if ts >= since else "before"] += cost(e["message"].get("usage") or {}, e["message"].get("model"))
     acts = collections.Counter(r.get("action") for r in log)
-    print(f"jev-router report — since {since:%Y-%m-%d %H:%M} UTC")
+    print(f"tacano report — since {since:%Y-%m-%d %H:%M} UTC")
     print("decisions:", dict(acts))
     print(f"overrides: {sum(1 for r in log if r.get('override'))}  |  Jev errors: {sum(1 for r in log if 'jev_error' in r)}")
     hm = [r["hook_ms"] for r in log if "hook_ms" in r]

@@ -1,5 +1,5 @@
 import json, os, subprocess, sys, tempfile, time, pathlib
-PLUG = pathlib.Path(__file__).resolve().parent.parent / "plugins" / "jev-router" / "scripts"
+PLUG = pathlib.Path(__file__).resolve().parent.parent / "plugins" / "tacano" / "scripts"
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="jevtest-"))
 
 

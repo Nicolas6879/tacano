@@ -1,4 +1,4 @@
-"""Shared logic for the jev-router hooks: config, Jev client, transcript reading, cost model, policy, state, logs.
+"""Shared logic for the tacano hooks: config, Jev client, transcript reading, cost model, policy, state, logs.
 Stdlib only. Every public entry point must fail open: a bug here must never block the user."""
 import datetime as dt
 import hashlib
@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA") or (pathlib.Path.home() / ".claude" / "jev-router-data"))
+DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA") or (pathlib.Path.home() / ".claude" / "tacano-data"))
 DATA.mkdir(parents=True, exist_ok=True)
 
 DEFAULTS = {
@@ -314,10 +314,10 @@ def build_handoff(path, cfg, lang="es"):
     keep = select_handoff(segs, cfg["handoff_budget_chars"], cfg["handoff_recent_share"])
     lab = {"user": "usuario", "assistant": "asistente", "tool": "herramienta"} if lang == "es" else \
           {"user": "user", "assistant": "assistant", "tool": "tool"}
-    head = ("[jev-router] Extractos LITERALES de la conversación previa a la compactación (lo más reciente + decisiones, "
+    head = ("[tacano] Extractos LITERALES de la conversación previa a la compactación (lo más reciente + decisiones, "
             "restricciones y datos concretos anteriores). Úsalos como fuente exacta; el resumen puede omitir detalles."
             if lang == "es" else
-            "[jev-router] VERBATIM excerpts from before compaction (most recent history + earlier decisions, constraints "
+            "[tacano] VERBATIM excerpts from before compaction (most recent history + earlier decisions, constraints "
             "and concrete values). Treat them as exact; the summary may omit details.")
     body, last = [], -2
     for j in keep:
