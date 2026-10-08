@@ -14,12 +14,18 @@ TEXT = {
            "Quiero que Opus actúe como orquestador. Cuando aparezca una pista [tacano] sugiriendo un trabajador,\n"
            "síguela: planea tú, delega la ejecución al agente tacano:… indicado con un brief autocontenido\n"
            "(rutas, objetivo, criterios de aceptación) y revisa el resultado. Considera esto mi petición\n"
-           "explícita de usar esos subagentes. No delegues opiniones, decisiones, secretos ni publicaciones.\n"),
+           "explícita de usar esos subagentes. No delegues opiniones, decisiones, secretos ni publicaciones.\n"
+           "Cuando digo \"hazlo tú\" me refiero a Claude, no a que no delegues: sigue orquestando salvo que diga\n"
+           "explícitamente que no uses subagentes. Si el trabajo usa conectores MCP o el navegador (Apify, Notion,\n"
+           "Chrome…), delega a tacano:sonnet-tools-worker o tacano:haiku-browser-worker.\n"),
     "en": ("## Orchestration\n"
            "I want Opus to act as the orchestrator. When a [tacano] hint suggests a worker, follow it:\n"
            "plan yourself, delegate the execution to the named tacano:… agent with a self-contained brief\n"
            "(paths, goal, acceptance criteria) and review the result. Treat this as my explicit request to\n"
-           "use those subagents. Never delegate opinions, decisions, secrets or publishing.\n"),
+           "use those subagents. Never delegate opinions, decisions, secrets or publishing.\n"
+           "When I say \"do it yourself\" I mean Claude, not \"don't delegate\": keep orchestrating unless I\n"
+           "explicitly say not to use subagents. If the work needs MCP connectors or the browser (Apify, Notion,\n"
+           "Chrome…), delegate to tacano:sonnet-tools-worker or tacano:haiku-browser-worker.\n"),
 }
 BLOCK = re.compile(re.escape(START) + r".*?" + re.escape(END) + r"\n?", re.S)
 

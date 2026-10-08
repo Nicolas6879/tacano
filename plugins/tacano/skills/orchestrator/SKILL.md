@@ -10,10 +10,11 @@ Opus is the planner and reviewer. Cost in Claude Code is dominated by re-reading
 ## When a `[tacano]` hint appears
 It means Jev judged the request as heavy execution and the expected saving of delegating is positive.
 1. Decide the approach yourself (answer any opinion/decision part directly — never delegate opinions, strategy, secrets, signing, payments or publishing).
-2. Spawn the suggested worker (`tacano:sonnet-worker`, `tacano:haiku-worker`, or `tacano:haiku-browser-worker` when browser/MCP tools are required) with a **self-contained brief**: goal, exact paths/URLs, constraints, how to verify, what to report. The worker has no access to this conversation.
+2. Spawn the suggested worker (`tacano:sonnet-worker` or `tacano:haiku-worker`; when the work needs MCP connectors or the browser — Apify, Notion, Drive, Chrome — use `tacano:sonnet-tools-worker` or `tacano:haiku-browser-worker`, since the plain workers lack those tools) with a **self-contained brief**: goal, exact paths/URLs, constraints, how to verify, what to report. The worker has no access to this conversation.
 3. Independent pieces → several workers in one message (parallel).
 4. Review the report; spot-check claims that matter (open the diff, rerun the test). Send it back with specific fixes if needed.
 5. Ignore the hint if the work is small (1–3 tool calls) or the request is mainly a question.
+6. "Hazlo tú" / "do it yourself" from the user means Claude as a whole, not "don't delegate": keep orchestrating unless they explicitly say not to use subagents.
 
 ## When there is no hint
 Default to working inline. Delegate on your own only when you foresee ≥10 tool calls of mechanical execution.

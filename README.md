@@ -118,7 +118,7 @@ Create `config.json` in the plugin's data folder (`~/.claude/plugins/data/tacano
 python plugins/tacano/scripts/report.py
 ```
 
-`report.py` compares your cost per prompt before and after installing, using your local transcripts (subagents included). It also counts blocks, overrides and handoffs, and shows whether Opus followed the delegation hints.
+`report.py` reads your local transcripts and estimates what each Tacaño action saved: every delegation hint Opus followed (the worker's cost vs. doing that work in Opus) and every compaction it asked for (lighter calls afterwards, net of the compaction cost). It also shows blocks, overrides and latency, plus your raw cost per prompt before and after installing. That last number depends on what you worked on, so don't read it as Tacaño's effect.
 
 ## Privacy
 
@@ -138,7 +138,7 @@ plugins/tacano/
   scripts/precompact.py             saves the verbatim handoff
   scripts/session.py                re-injects the handoff and any held-back message
   scripts/report.py                 measures real savings
-  agents/                           sonnet-worker, haiku-worker, haiku-browser-worker
+  agents/                           sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
   skills/orchestrator/              protocol for Opus
   skills/setup/ + scripts/setup.py  /tacano:setup, opt-in to Opus-as-orchestrator
 lab/                                simulations and evaluation (run on YOUR transcripts)

@@ -1,4 +1,5 @@
-"""Measure real effect after install: $ per human prompt before vs after, block/override rates, hint follow-through.
+"""Measure what Tacaño did: per-action savings (followed delegation hints, compactions), hint follow-through,
+block/override rates, plus the raw $ per human prompt before vs after install (confounded by the kind of work).
 usage: python report.py [--since YYYY-MM-DD]   (default: date of the first tacano decision)"""
 import collections
 import datetime as dt
@@ -34,6 +35,56 @@ def cost(u, model):
             + (u.get("cache_read_input_tokens") or 0) * r + (u.get("cache_creation_input_tokens") or 0) * w) / 1e6
 
 
+def _ts(x):
+    return dt.datetime.fromisoformat(x.replace("Z", "+00:00"))
+
+
+def _usage_ctx(u):
+    return sum(u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+
+
+def load_session(f):
+    """Human prompt times, main-thread calls (ts, ctx, usage, model), compaction times, subagent runs."""
+    humans, calls, compactions, seen = [], [], [], set()
+    for line in open(f, encoding="utf-8", errors="ignore"):
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if e.get("isSidechain") or "timestamp" not in e:
+            continue
+        if e.get("type") == "user" and (e.get("origin") or {}).get("kind") == "human":
+            humans.append(_ts(e["timestamp"]))
+        elif e.get("type") == "system" and e.get("subtype") == "compact_boundary":
+            compactions.append(_ts(e["timestamp"]))
+        elif e.get("type") == "assistant":
+            m = e.get("message") or {}
+            if m.get("id") in seen:
+                continue
+            seen.add(m.get("id"))
+            u = m.get("usage") or {}
+            calls.append((_ts(e["timestamp"]), _usage_ctx(u), u, m.get("model")))
+    subs = []
+    for sf in glob.glob(str(pathlib.Path(f).with_suffix("")) + "/subagents/*.jsonl"):
+        runs, seen2 = [], set()
+        for line in open(sf, encoding="utf-8", errors="ignore"):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("type") == "assistant" and e["message"].get("id") not in seen2:
+                seen2.add(e["message"].get("id"))
+                u = e["message"].get("usage") or {}
+                runs.append((_ts(e["timestamp"]), _usage_ctx(u), u, e["message"].get("model")))
+        if runs:
+            subs.append(runs)
+    return humans, calls, compactions, subs
+
+
+def opus_cost(u):
+    return cost(u, "opus")
+
+
 def main():
     log = []
     try:
@@ -48,45 +99,66 @@ def main():
     if not since:
         print("No decisions logged yet.")
         return
+    files = {pathlib.Path(f).stem: f for f in glob.glob(str(pathlib.Path.home() / ".claude" / "projects" / "*" / "*.jsonl"))}
+    sessions = {}
+
+    def sess(sid):
+        if sid not in sessions:
+            sessions[sid] = load_session(files[sid]) if sid in files else ([], [], [], [])
+        return sessions[sid]
+
+    # ---- delegation hints: followed if a cheaper subagent ran during that human turn ----
+    hints = [r for r in log if str(r.get("action", "")).startswith("hint_")]
+    followed, deleg_saved = 0, 0.0
+    for r in hints:
+        humans, calls, _, subs = sess(r["session"])
+        t = dt.datetime.fromisoformat(r["ts"])
+        start = next((h for h in humans if h >= t - dt.timedelta(seconds=5)), None)
+        if not start:
+            continue
+        end = next((h for h in humans if h > start), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
+        ran = [runs for runs in subs if start <= runs[0][0] < end and "opus" not in (runs[0][3] or "opus")]
+        if not ran:
+            continue
+        followed += 1
+        main_ctx = max((c for ts, c, _, _ in calls if ts <= ran[0][0][0]), default=0)
+        for runs in ran:
+            base = runs[0][1]
+            # Counterfactual: the same calls done by Opus inside the main context (which is bigger than the worker's).
+            inline = sum(opus_cost(u) + max(0, main_ctx - base) * PRICES["opus"][2] / 1e6 for _, _, u, _ in runs)
+            deleg_saved += inline - sum(cost(u, m) for _, _, u, m in runs)
+
+    # ---- compactions Tacaño asked for: lighter calls afterwards minus the cost of compacting ----
+    blocks = [r for r in log if r.get("action") == "block_compact"]
+    done, comp_saved = 0, 0.0
+    for r in blocks:
+        humans, calls, compactions, _ = sess(r["session"])
+        t = dt.datetime.fromisoformat(r["ts"])
+        cb = next((c for c in compactions if t <= c <= t + dt.timedelta(minutes=30)), None)
+        if not cb:
+            continue
+        done += 1
+        nxt = next((c for c in compactions if c > cb), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
+        after = [c for ts, c, _, _ in calls if cb < ts < nxt]
+        if not after:
+            continue
+        o_in, o_out, o_read, o_write = PRICES["opus"]
+        switch = (r["ctx"] * o_read + 10_000 * o_out + after[0] * o_write) / 1e6
+        comp_saved += sum(max(0, r["ctx"] - c) for c in after) * o_read / 1e6 - switch
+    clears = [r for r in log if r.get("action") == "block_clear"]
+    cfg = J.config()
+    clear_model = sum(J.switch_saving(cfg, r["ctx"], "clear", None) for r in clears)
+
+    # ---- raw before/after (all Claude Code spend; depends on what you worked on) ----
     usd = {"before": 0.0, "after": 0.0}
     prompts = {"before": 0, "after": 0}
-    followed = collections.Counter()
-    hinted = {r["session"] for r in log if str(r.get("action", "")).startswith("hint_")}
-    for f in glob.glob(str(pathlib.Path.home() / ".claude" / "projects" / "*" / "*.jsonl")):
-        sid = pathlib.Path(f).stem
-        cur, seen = None, set()
-        for line in open(f, encoding="utf-8", errors="ignore"):
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if e.get("type") == "user" and (e.get("origin") or {}).get("kind") == "human" and not e.get("isSidechain"):
-                ts = dt.datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00"))
-                cur = "after" if ts >= since else "before"
-                prompts[cur] += 1
-            elif e.get("type") == "assistant" and cur:
-                m = e.get("message") or {}
-                if m.get("id") in seen:
-                    continue
-                seen.add(m.get("id"))
-                usd[cur] += cost(m.get("usage") or {}, m.get("model"))
-                if sid in hinted:
-                    for b in m.get("content") or []:
-                        if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task") \
-                                and "worker" in json.dumps(b.get("input", {})):
-                            followed[sid] += 1
-        # subagent transcripts count toward their session's cost
-        for sf in glob.glob(str(pathlib.Path(f).with_suffix("")) + "/subagents/*.jsonl"):
-            seen2 = set()
-            for line in open(sf, encoding="utf-8", errors="ignore"):
-                try:
-                    e = json.loads(line)
-                except ValueError:
-                    continue
-                if e.get("type") == "assistant" and e["message"].get("id") not in seen2:
-                    seen2.add(e["message"].get("id"))
-                    ts = dt.datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00"))
-                    usd["after" if ts >= since else "before"] += cost(e["message"].get("usage") or {}, e["message"].get("model"))
+    for sid in files:
+        humans, calls, _, subs = sess(sid)
+        for h in humans:
+            prompts["after" if h >= since else "before"] += 1
+        for ts, _, u, m in calls + [c for runs in subs for c in runs]:
+            usd["after" if ts >= since else "before"] += cost(u, m)
+
     acts = collections.Counter(r.get("action") for r in log)
     print(f"tacano report — since {since:%Y-%m-%d %H:%M} UTC")
     print("decisions:", dict(acts))
@@ -94,10 +166,17 @@ def main():
     hm = [r["hook_ms"] for r in log if "hook_ms" in r]
     if hm:
         print(f"hook latency p50 {st.median(hm):.0f} ms, p90 {sorted(hm)[int(.9 * len(hm))]} ms")
-    print(f"sessions with a hint: {len(hinted)}, of which spawned a worker: {len(followed)}")
+    print()
+    print("What Tacaño saved (estimates, per action):")
+    print(f"  delegation hints: {len(hints)}, followed {followed} -> ~${deleg_saved:,.2f} vs doing that work in Opus")
+    print(f"  /compact blocks:  {len(blocks)}, compacted {done} -> ~${comp_saved:,.2f} in lighter calls after, net of compaction cost")
+    print(f"  /clear blocks:    {len(clears)} -> ~${clear_model:,.2f} modeled (the new session isn't linked to the old one)")
+    print(f"  total ~${deleg_saved + comp_saved + clear_model:,.2f}")
+    print()
+    print("Raw spend per human prompt (all Claude Code use, not attributable to Tacaño alone):")
     for k in ("before", "after"):
-        print(f"{k:>6}: ${usd[k]:,.2f} over {prompts[k]} human prompts -> ${usd[k] / max(1, prompts[k]):.3f} per prompt")
-    print("(compare per-prompt cost on similar work; small 'after' samples are noisy)")
+        print(f"  {k:>6}: ${usd[k]:,.2f} over {prompts[k]} prompts -> ${usd[k] / max(1, prompts[k]):.3f} per prompt")
+    print("  (only meaningful when the work before and after is similar)")
 
 
 if __name__ == "__main__":

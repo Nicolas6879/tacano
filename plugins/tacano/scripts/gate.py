@@ -24,7 +24,9 @@ MSG = {
         "kept": " Al compactar guardo extractos literales de lo reciente y de las decisiones clave.",
         "hint": ("[tacano] Jev estima trabajo de ejecución {vol} (P={p:.2f}), apto para {worker}. Política: decide/planea tú; "
                  "delega la ejecución con Agent(subagent_type=\"tacano:{worker}-worker\") y un brief autocontenido "
-                 "(rutas, objetivo, criterios de aceptación); revisa el resultado. Ahorro esperado ≈ ${ev:.2f}. "
+                 "(rutas, objetivo, criterios de aceptación); revisa el resultado. Si el trabajo usa conectores MCP o el navegador "
+                 "(Apify, Notion, Drive, Chrome…), usa tacano:{tools} en su lugar: el otro no tiene esas herramientas. "
+                 "Ahorro esperado ≈ ${ev:.2f}. "
                  "Si la petición es sobre todo opinión o decisión, ignora esta pista."),
     },
     "en": {
@@ -41,7 +43,9 @@ MSG = {
         "kept": " On compaction I keep verbatim excerpts of recent history and key decisions.",
         "hint": ("[tacano] Jev estimates {vol} execution work (P={p:.2f}), suitable for {worker}. Policy: you decide/plan; "
                  "delegate execution with Agent(subagent_type=\"tacano:{worker}-worker\") and a self-contained brief "
-                 "(paths, goal, acceptance criteria); review the result. Expected saving ≈ ${ev:.2f}. "
+                 "(paths, goal, acceptance criteria); review the result. If the work needs MCP connectors or the browser "
+                 "(Apify, Notion, Drive, Chrome…), use tacano:{tools} instead: the other one lacks those tools. "
+                 "Expected saving ≈ ${ev:.2f}. "
                  "If the request is mostly opinion or a decision, ignore this hint."),
     },
 }
@@ -115,7 +119,8 @@ def main():
         if worker:
             vol = max(answers["volume"]["probabilities"].items(), key=lambda kv: kv[1])
             out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                   "additionalContext": m["hint"].format(vol=vol[0], p=vol[1], worker=worker, ev=ev)}}
+                   "additionalContext": m["hint"].format(vol=vol[0], p=vol[1], worker=worker, ev=ev,
+                                                       tools=worker + ("-browser-worker" if worker == "haiku" else "-tools-worker"))}}
     else:
         rec["action"] = "silent_nojev"
     J.save_state(sid, st)
