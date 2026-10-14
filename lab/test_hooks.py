@@ -1,6 +1,17 @@
-import json, os, subprocess, sys, tempfile, time, pathlib
+import json, os, shutil, subprocess, sys, tempfile, time, pathlib
 PLUG = pathlib.Path(__file__).resolve().parent.parent / "plugins" / "tacano" / "scripts"
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="jevtest-"))
+sys.stdout.reconfigure(errors="replace")
+
+# Run against a clean fake home so the user's own ~/.tacano.json / CLAUDE.md never change the results;
+# only the Jev key file is copied over (the tests make real Jev calls).
+REAL_HOME = pathlib.Path.home()
+HOME = TMP / "home"
+HOME.mkdir()
+for name in (".typesafe.env", ".typesafe.env.txt"):
+    if (REAL_HOME / name).exists():
+        shutil.copy(REAL_HOME / name, HOME / name)
+os.environ["HOME"] = os.environ["USERPROFILE"] = str(HOME)
 
 
 def run(script, payload, env_extra=None, raw=None):
@@ -172,6 +183,24 @@ rc, out, ms, _ = run("gate.py", {"prompt": "arregla el login", "prompt_id": "p1"
 check("human prompt at 600k blocks", out and out.get("decision") == "block")
 rc, out, ms, _ = run("gate.py", {"prompt": "otro texto del mismo turno", "prompt_id": "p1", "session_id": "s21", "transcript_path": big})
 check("same prompt_id (machine turn) skipped", out is None)
+
+hardcfg = dict(jevlib.DEFAULTS)
+check("bypassed boundary doesn't silence the hard cap",
+      jevlib.compact_decision(hardcfg, 560_000, False, None, 642_000, 0, False) == ("compact", "hard"))
+check("bypassed hard block waits once", jevlib.compact_decision(hardcfg, 560_000, False, None, 660_000, 0, True) is None)
+check("snooze still silences boundary", jevlib.compact_decision(
+      hardcfg, 400_000, False, {"boundary": {"noul": 0.95}, "fresh": {"probabilities": {"fresh_ok": 0.1}}}, 480_000) is None)
+# Gate-level: an old bypass (no snooze_at, or > snooze_max_minutes) no longer silences a hard block.
+(TMP / "data" / "state-s30.json").write_text(json.dumps({"snooze_until_ctx": 700_000, "snooze_at": time.time() - 3 * 3600}))
+rc, out, ms, _ = run("gate.py", {"prompt": "sigamos con el hilo", "prompt_id": "q1", "session_id": "s30", "transcript_path": transcript(600_000)})
+check("expired bypass -> blocks again", out and out.get("decision") == "block")
+(TMP / "data" / "state-s31.json").write_text(json.dumps({"snooze_until_ctx": 700_000, "snooze_at": time.time() - 60, "snooze_hard": True}))
+rc, out, ms, _ = run("gate.py", {"prompt": "sigamos con el hilo", "prompt_id": "q2", "session_id": "s31", "transcript_path": transcript(600_000)})
+check("fresh hard bypass -> no block", not (out and out.get("decision") == "block"))
+rc, out, ms, _ = run("gate.py", {"prompt": "sigamos con el hilo", "prompt_id": "q3", "session_id": "s31", "transcript_path": transcript(600_000, idle_min=180)})
+check("cold cache drops the bypass", out and out.get("decision") == "block")
+rc, out, ms, _ = run("session.py", {"session_id": "s32", "source": "resume", "prompt_cache_likely_expired": True, "context_tokens": 590_000, "estimated_cache_write_usd": 4.72})
+check("cold warning gives both costs", out and "4.72" in out.get("systemMessage", "") and "0.79" in out.get("systemMessage", ""), ascii((out or {}).get("systemMessage", ""))[:200])
 
 cfg = {**jevlib.DEFAULTS, "compact_at_tokens": 60_000}
 newtask = {"boundary": {"noul": 0.95}, "fresh": {"probabilities": {"fresh_ok": 0.1}}}

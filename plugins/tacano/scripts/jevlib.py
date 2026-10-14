@@ -34,6 +34,7 @@ DEFAULTS = {
     "min_expected_saving_usd": 0.05,
     "override_window_minutes": 20,     # resend the same prompt within this window to bypass a block
     "snooze_tokens": 100_000,          # after a bypass, don't block again until context grows this much
+    "snooze_max_minutes": 120,         # ...or until this much time passes / the cache goes cold, whichever first
     "min_block_saving_usd": 0.50,      # boundary blocks only when compacting/clearing is expected to save at least this
     "block_horizon_calls": 80,         # calls assumed ahead in the session when pricing a boundary block
     "block_gap_tokens": 150_000,       # boundary blocks need the context to grow this much since the last compaction
@@ -263,19 +264,22 @@ def switch_saving(cfg, ctx, kind, answers=None):
     return (max(0, ctx - after) * o["read"] * ahead - cost) / 1e6
 
 
-def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0):
+def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0, snooze_hard=False):
     """Return None, or (kind, why) with kind in {"compact","clear"} and why in {"cold","hard","boundary"}.
-    floor = context size right after the last compaction (0 if none)."""
-    if ctx < snooze_until:
-        return None
+    floor = context size right after the last compaction (0 if none).
+    snooze_until: after a bypass, boundary blocks wait until ctx reaches it; the hard cap only waits when the
+    bypassed block was itself a hard one (snooze_hard). A cold cache is never snoozed: the caller drops the snooze."""
+    snoozed = ctx < snooze_until
     a = answers or {}
     fresh = a.get("fresh", {}).get("probabilities", {}).get("fresh_ok", 0.0)
     boundary = a.get("boundary", {}).get("noul", 0.0)
     kind = "clear" if fresh >= cfg["fresh_threshold"] else "compact"
     if cold and ctx >= cfg["cold_compact_at_tokens"]:
         return kind, "cold"
-    if ctx >= cfg["hard_compact_at_tokens"]:
+    if ctx >= cfg["hard_compact_at_tokens"] and not (snoozed and snooze_hard):
         return kind, "hard"
+    if snoozed:
+        return None
     if (ctx >= cfg["compact_at_tokens"] and (boundary >= cfg["boundary_threshold"] or kind == "clear")
             and ctx - floor >= cfg["block_gap_tokens"]
             and switch_saving(cfg, ctx, kind, a) >= cfg["min_block_saving_usd"]):

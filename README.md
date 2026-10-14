@@ -27,7 +27,7 @@ On every prompt, a hook asks Jev 7 typed questions in a single request: work vol
 
 | Situation | Action |
 |---|---|
-| Context ≥250k **and** Jev sees you starting a new task (only if switching is expected to save ≥$0.50, at most once per 150k of growth), or context ≥550k, or an expired cache with ≥300k | Blocks the prompt (0 tokens spent) and suggests `/compact`, or `/clear` if the request doesn't need the history. Then resend your message (up arrow). Resend it without compacting to skip the block. |
+| Context ≥250k **and** Jev sees you starting a new task (only if switching is expected to save ≥$0.50, at most once per 150k of growth), or context ≥550k, or an expired cache with ≥300k | Blocks the prompt (0 tokens spent) and suggests `/compact`, or `/clear` if the request doesn't need the history. Then resend your message (up arrow). Resend it without compacting to skip the block; the skip lasts until the context grows 100k, 2 hours pass or the cache expires, and never silences the 550k cap for long. |
 | Any compaction (manual or automatic) | `PreCompact` saves ~13k tokens of **verbatim** excerpts (the most recent history plus decisions, constraints and concrete values). `SessionStart` injects them back after the summary. |
 | Heavy execution (≥9 expected tool actions) with an expected saving above $0.05 | Hints Opus to delegate the execution to `sonnet-worker` or `haiku-worker` (restricted-tool agents that start with a small context) and review the result. |
 | Opinions, decisions, secrets, signing, payments, publishing | Never delegated. |
@@ -46,7 +46,7 @@ Replay of 500 real turns, call by call, using the plugin's own code and real Jev
 | Interruptions | 1 every ~38 prompts |
 | Information that survives a compaction | summary alone: 50% → summary + handoff: ~85–95% |
 | Hook latency | gate p50 ~430 ms; `PreCompact` <1 s on a 26 MB transcript |
-| Tests | 39/39 |
+| Tests | 50/50 |
 
 Tried and dropped:
 - **RTK**: lost information Claude needed afterwards.
@@ -114,9 +114,14 @@ Create `config.json` in the plugin's data folder (`~/.claude/plugins/data/tacano
 
 ## Measure your real savings
 
+In any Claude Code session, on any computer:
+
 ```
-python plugins/tacano/scripts/report.py
+/tacano:report
+/tacano:report --since 2026-10-12
 ```
+
+(From a clone you can also run `python plugins/tacano/scripts/report.py [--since YYYY-MM-DD]`.)
 
 `report.py` reads your local transcripts and estimates what each Tacaño action saved: every delegation hint Opus followed (the worker's cost vs. doing that work in Opus) and every compaction it asked for (lighter calls afterwards, net of the compaction cost). It also shows blocks, overrides and latency, plus your raw cost per prompt before and after installing. That last number depends on what you worked on, so don't read it as Tacaño's effect.
 
@@ -141,6 +146,7 @@ plugins/tacano/
   agents/                           sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
   skills/orchestrator/              protocol for Opus
   skills/setup/ + scripts/setup.py  /tacano:setup, opt-in to Opus-as-orchestrator
+  skills/report/                    /tacano:report, runs scripts/report.py
 lab/                                simulations and evaluation (run on YOUR transcripts)
 ```
 
@@ -152,7 +158,7 @@ lab/                                simulations and evaluation (run on YOUR tran
 python lab/mine2.py && python lab/mine3.py      # extract turns
 python lab/final_sim.py fetch                   # Jev answers to the plugin's questions
 python lab/final_sim.py grid                    # full replay + tuning grid
-python lab/test_hooks.py                        # 39 edge-case tests
+python lab/test_hooks.py                        # 50 edge-case tests
 ```
 
 ## Limitations

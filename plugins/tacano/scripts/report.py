@@ -86,19 +86,25 @@ def opus_cost(u):
 
 
 def main():
+    # Windows consoles default to cp1252; never crash on a character it can't print.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     log = []
     try:
         log = [json.loads(l) for l in (J.DATA / "decisions.jsonl").read_text(encoding="utf-8").splitlines()]
     except OSError:
         pass
-    since = None
-    if "--since" in sys.argv:
-        since = dt.datetime.fromisoformat(sys.argv[sys.argv.index("--since") + 1]).replace(tzinfo=dt.timezone.utc)
-    elif log:
-        since = dt.datetime.fromisoformat(log[0]["ts"])
-    if not since:
+    if not log:
         print("No decisions logged yet.")
         return
+    installed = dt.datetime.fromisoformat(log[0]["ts"])
+    since = installed
+    if "--since" in sys.argv:
+        since = dt.datetime.fromisoformat(sys.argv[sys.argv.index("--since") + 1]).replace(tzinfo=dt.timezone.utc)
+    log = [r for r in log if dt.datetime.fromisoformat(r["ts"]) >= since]
     files = {pathlib.Path(f).stem: f for f in glob.glob(str(pathlib.Path.home() / ".claude" / "projects" / "*" / "*.jsonl"))}
     sessions = {}
 
@@ -155,27 +161,30 @@ def main():
     for sid in files:
         humans, calls, _, subs = sess(sid)
         for h in humans:
-            prompts["after" if h >= since else "before"] += 1
+            if h < installed or h >= since:
+                prompts["after" if h >= since else "before"] += 1
         for ts, _, u, m in calls + [c for runs in subs for c in runs]:
-            usd["after" if ts >= since else "before"] += cost(u, m)
+            if ts < installed or ts >= since:
+                usd["after" if ts >= since else "before"] += cost(u, m)
 
     acts = collections.Counter(r.get("action") for r in log)
-    print(f"tacano report — since {since:%Y-%m-%d %H:%M} UTC")
+    print(f"tacano report — since {since:%Y-%m-%d %H:%M} UTC (installed {installed:%Y-%m-%d})")
     print("decisions:", dict(acts))
     print(f"overrides: {sum(1 for r in log if r.get('override'))}  |  Jev errors: {sum(1 for r in log if 'jev_error' in r)}")
     hm = [r["hook_ms"] for r in log if "hook_ms" in r]
     if hm:
         print(f"hook latency p50 {st.median(hm):.0f} ms, p90 {sorted(hm)[int(.9 * len(hm))]} ms")
     print()
-    print("What Tacaño saved (estimates, per action):")
+    print("What Tacano saved (estimates, per action):")
     print(f"  delegation hints: {len(hints)}, followed {followed} -> ~${deleg_saved:,.2f} vs doing that work in Opus")
     print(f"  /compact blocks:  {len(blocks)}, compacted {done} -> ~${comp_saved:,.2f} in lighter calls after, net of compaction cost")
     print(f"  /clear blocks:    {len(clears)} -> ~${clear_model:,.2f} modeled (the new session isn't linked to the old one)")
     print(f"  total ~${deleg_saved + comp_saved + clear_model:,.2f}")
     print()
-    print("Raw spend per human prompt (all Claude Code use, not attributable to Tacaño alone):")
+    print("Raw spend per human prompt (all Claude Code use, not attributable to Tacano alone):")
     for k in ("before", "after"):
-        print(f"  {k:>6}: ${usd[k]:,.2f} over {prompts[k]} prompts -> ${usd[k] / max(1, prompts[k]):.3f} per prompt")
+        label = "before install" if k == "before" else "since"
+        print(f"  {label:>14}: ${usd[k]:,.2f} over {prompts[k]} prompts -> ${usd[k] / max(1, prompts[k]):.3f} per prompt")
     print("  (only meaningful when the work before and after is similar)")
 
 

@@ -22,7 +22,7 @@ En cada prompt, un hook le hace a Jev 7 preguntas tipadas en un solo request: vo
 
 | Situación | Acción |
 |---|---|
-| Contexto ≥250k **y** Jev detecta que empiezas una tarea nueva (solo si cambiar ahorra ≥$0.50, y máximo una vez por cada 150k de crecimiento), o contexto ≥550k, o caché vencido con ≥300k | Bloquea el prompt (0 tokens) y sugiere `/compact`, o `/clear` si el pedido no necesita el historial. Después reenvías tu mensaje (flecha ↑). Para saltarte el bloqueo, reenvíalo sin compactar. |
+| Contexto ≥250k **y** Jev detecta que empiezas una tarea nueva (solo si cambiar ahorra ≥$0.50, y máximo una vez por cada 150k de crecimiento), o contexto ≥550k, o caché vencido con ≥300k | Bloquea el prompt (0 tokens) y sugiere `/compact`, o `/clear` si el pedido no necesita el historial. Después reenvías tu mensaje (flecha ↑). Para saltarte el bloqueo, reenvíalo sin compactar; el salto dura hasta que el contexto crezca 100k, pasen 2 horas o se venza el caché, y no apaga el tope de 550k por mucho tiempo. |
 | Cualquier compactación (manual o automática) | `PreCompact` guarda ~13k tokens de extractos **literales** (lo más reciente + decisiones, restricciones y valores concretos) y `SessionStart` los reinyecta. |
 | Trabajo pesado (≥9 acciones previstas) con ahorro esperado > $0.05 | Pista para Opus: delega la ejecución en `sonnet-worker` o `haiku-worker` (agentes con herramientas restringidas que arrancan livianos) y revisa el resultado. |
 | Opiniones, decisiones, secretos, firmas, pagos, publicaciones | Nunca se delegan. |
@@ -41,7 +41,7 @@ Replay de 500 turnos reales, llamada por llamada, con el código del plugin y re
 | Interrupciones | 1 cada ~38 prompts |
 | Lo que sobrevive a una compactación | resumen solo: 50% → resumen + traspaso: ~85–95% |
 | Latencia del hook | p50 ~430 ms; `PreCompact` <1 s con un transcript de 26 MB |
-| Tests | 39/39 |
+| Tests | 50/50 |
 
 Qué se probó y se descartó:
 - **RTK**: perdía la información que Claude necesitaba después.
@@ -109,9 +109,14 @@ Crea `config.json` en la carpeta de datos del plugin (`~/.claude/plugins/data/ta
 
 ## Medir el ahorro real
 
+En cualquier sesión de Claude Code, en cualquier PC:
+
 ```
-python plugins/tacano/scripts/report.py
+/tacano:report
+/tacano:report --since 2026-10-12
 ```
+
+(Desde una copia del repo también puedes correr `python plugins/tacano/scripts/report.py [--since YYYY-MM-DD]`.)
 
 Lee tus transcripts locales y estima cuánto ahorró cada acción de Tacaño: cada pista de delegación que Opus siguió (lo que costó el trabajador frente a hacerlo en Opus) y cada compactación que pidió (llamadas más livianas después, descontando lo que costó compactar). También muestra bloqueos, overrides y latencia, y tu costo bruto por mensaje antes y después de instalar. Ese último número depende de en qué trabajaste, así que no lo leas como el efecto de Tacaño.
 
@@ -136,6 +141,7 @@ plugins/tacano/
   agents/                           sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
   skills/orchestrator/          protocolo para Opus
   skills/setup/ + scripts/setup.py  /tacano:setup, activar a Opus como orquestador
+  skills/report/                    /tacano:report, ejecuta scripts/report.py
 lab/                                simulaciones y evaluación (usan TUS transcripts)
 ```
 
@@ -147,7 +153,7 @@ lab/                                simulaciones y evaluación (usan TUS transcr
 python lab/mine2.py && python lab/mine3.py      # extrae turnos
 python lab/final_sim.py fetch                   # respuestas de Jev a las preguntas del plugin
 python lab/final_sim.py grid                    # replay completo + grilla de ajuste
-python lab/test_hooks.py                        # 39 tests de casos límite
+python lab/test_hooks.py                        # 50 tests de casos límite
 ```
 
 ## Limitaciones

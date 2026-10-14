@@ -56,12 +56,16 @@ def main():
         ctx = inp.get("context_tokens") or 0
         usd = inp.get("estimated_cache_write_usd")
         if ctx >= cfg["cold_compact_at_tokens"]:
-            msg = (f"[tacano] 🪙 Modo tacaño: esta sesión reanuda {ctx // 1000}k tokens con el caché vencido"
-                   f"{f' (~${usd:.2f} solo en reescribirlo)' if usd else ''}. Si vas a seguir el mismo tema, /compact primero; "
-                   "si es otro tema, abre una sesión nueva."
+            w = cfg["prices"]["opus"]["write"] / 1e6
+            now = usd or ctx * w
+            later = (85_000 + cfg["handoff_budget_chars"] / 3.5) * w   # same estimate as jevlib.switch_saving
+            msg = (f"[tacano] 🪙 Modo tacaño: esta sesión reanuda {ctx // 1000}k tokens con el caché vencido: volver aquí "
+                   f"cuesta ~${now:.2f} solo en reescribirlo. Si compactas, cada próxima vez costará ~${later:.2f}. "
+                   "Mismo tema: /compact y reenvía tu mensaje; otro tema: abre una sesión nueva."
                    if es else
-                   f"[tacano] 🪙 Being stingy: resuming {ctx // 1000}k tokens with an expired cache"
-                   f"{f' (~${usd:.2f} just to rewrite it)' if usd else ''}. Same topic: /compact first; new topic: new session.")
+                   f"[tacano] 🪙 Being stingy: resuming {ctx // 1000}k tokens with an expired cache: coming back here costs "
+                   f"~${now:.2f} just to rewrite it. After /compact, each future return costs ~${later:.2f}. "
+                   "Same topic: /compact and resend your message; new topic: open a new session.")
             out = {"systemMessage": msg}
             J.log({"action": "warn_cold_resume", "ctx": ctx, "usd": usd})
     if out:

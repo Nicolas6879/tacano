@@ -80,7 +80,8 @@ def main():
     override = (st.get("blocked_hash") == J.h(prompt)
                 and time.time() - st.get("blocked_at", 0) < cfg["override_window_minutes"] * 60)
     if override:
-        st.update(blocked_hash=None, snooze_until_ctx=ctx + cfg["snooze_tokens"])
+        st.update(blocked_hash=None, snooze_until_ctx=ctx + cfg["snooze_tokens"], snooze_at=time.time(),
+                  snooze_hard=st.get("blocked_why") == "hard")
         rec["override"] = True
 
     answers, err = None, None
@@ -99,7 +100,12 @@ def main():
         if ctx < 0.6 * st.get("last_ctx", 0):
             st["floor"] = ctx
         st["last_ctx"] = ctx
-    dec = None if override else J.compact_decision(cfg, ctx, cold, answers, st.get("snooze_until_ctx", 0), st.get("floor", 0))
+    # A bypass lasts until the context grows snooze_tokens, snooze_max_minutes pass, or the cache goes cold.
+    snooze = st.get("snooze_until_ctx", 0)
+    if cold or time.time() - st.get("snooze_at", 0) > cfg["snooze_max_minutes"] * 60:
+        snooze = 0
+    dec = None if override else J.compact_decision(cfg, ctx, cold, answers, snooze, st.get("floor", 0),
+                                                    st.get("snooze_hard", False))
     if dec:
         kind, why = dec
         now = J.resume_cost(cfg, ctx, False)
@@ -110,7 +116,7 @@ def main():
         if kind == "compact":
             reason += m["kept"]
         out = {"decision": "block", "reason": reason}
-        st.update(blocked_hash=J.h(prompt), blocked_at=time.time(), pending_prompt=prompt[:4000],
+        st.update(blocked_hash=J.h(prompt), blocked_at=time.time(), blocked_why=why, pending_prompt=prompt[:4000],
                   pending_at=time.time(), cwd=inp.get("cwd"))
         rec.update(action="block_" + kind, why=why)
     elif answers:
