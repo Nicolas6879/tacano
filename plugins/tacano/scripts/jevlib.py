@@ -10,6 +10,8 @@ import time
 import urllib.error
 import urllib.request
 
+import prices as PR
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 # Hooks get CLAUDE_PLUGIN_DATA; when run by hand (report.py) fall back to the installed plugin's data folder.
 DATA = pathlib.Path(os.environ.get("CLAUDE_PLUGIN_DATA")
@@ -31,6 +33,7 @@ DEFAULTS = {
     "sensitive_threshold": 0.3,
     "keep_opus_threshold": 0.3,
     "haiku_threshold": 0.8,
+    "opus_worker_keep_from": 0.15,     # base Fable only: keep_opus in [this, keep_opus_threshold) -> Opus worker, not Sonnet
     "min_expected_saving_usd": 0.05,
     "override_window_minutes": 20,     # resend the same prompt within this window to bypass a block
     "snooze_tokens": 100_000,          # after a bypass, don't block again until context grows this much
@@ -41,12 +44,8 @@ DEFAULTS = {
     "clear_base_tokens": 45_000,       # fresh-session context after /clear
     "jev_timeout_s": 4.0,
     "enabled": True,
-    # $/MTok; 1h cache writes = 2x input. Opus/Sonnet 5.5: claude-api skill (2026-09-25).
-    # Haiku 5.5 (2026-10-07) is tiered: prompts over 100k tokens bill at the "long" rates.
-    "prices": {"opus": {"out": 20, "read": 0.20, "write": 8},
-               "sonnet": {"out": 10, "read": 0.20, "write": 4},
-               "haiku": {"out": 0.50, "read": 0.01, "write": 0.20,
-                         "long_from": 100_000, "long": {"out": 2.50, "read": 0.05, "write": 1.00}}},
+    # $/MTok (API-equivalent units): single table in prices.py (verified 2026-11-12); override per family under "prices".
+    "prices": PR.default_prices(),
     # Calibrated on 500 real turns (lab/): calls per volume bucket, ctx growth per call, worker overheads.
     "calls_per_bucket": {"none": 1, "few": 2, "moderate": 5, "heavy": 17},
     "growth_per_call": 1600, "out_per_call": 450, "future_calls_cap": 52,
@@ -61,6 +60,8 @@ def config():
             cfg.update(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             pass
+    # Price overrides merge field by field onto prices.py (old partial configs keep working).
+    cfg["prices"] = PR.merge_prices(cfg.get("prices") if cfg.get("prices") is not DEFAULTS["prices"] else None)
     # Choice made at install time (plugin userConfig, editable in /config) wins over defaults and files.
     lang = os.environ.get("CLAUDE_PLUGIN_OPTION_LANG", "").strip().lower()
     if lang in ("en", "es"):
@@ -101,8 +102,9 @@ def _text(content):
 
 
 def read_transcript(path, tail_bytes=3_000_000):
-    """Return ctx tokens of the last API call, idle minutes, last assistant text, previous human prompt."""
-    info = {"ctx": 0, "idle_min": None, "last_assistant": "", "prev_prompt": "", "compacted": False}
+    """Return ctx tokens of the last API call, idle minutes, last assistant text, previous human prompt,
+    and the model id of the last real main-thread assistant message (None if unknown)."""
+    info = {"ctx": 0, "idle_min": None, "last_assistant": "", "prev_prompt": "", "compacted": False, "model": None}
     if not path or not os.path.exists(path):
         return info
     with open(path, "rb") as f:
@@ -123,6 +125,8 @@ def read_transcript(path, tail_bytes=3_000_000):
             ctx = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
             if ctx:
                 info["ctx"], info["compacted"] = ctx, False
+            if PR.family(m.get("model")):   # skips '<synthetic>' and missing ids
+                info["model"] = m["model"]
             txt = _text(m.get("content"))
             if txt.strip():
                 info["last_assistant"] = txt
@@ -202,19 +206,20 @@ def ask_jev(state, questions, timeout):
 
 
 # ---------- cost model ----------
-def rates(p, prompt_tokens):
-    """Per-MTok rates for a call whose prompt is prompt_tokens long (handles tiered models)."""
-    return p["long"] if "long_from" in p and prompt_tokens > p["long_from"] else p
+rates = PR.rates
 
 
-def _turn_cost(cfg, ctx0, k, model, delegated):
+def _turn_cost(cfg, ctx0, k, model, delegated, base="opus"):
+    """$ for a turn of k calls done inline by `base` (delegated=False) or handed to worker `model` (delegated=True)."""
     P = cfg["prices"]
-    o, g, out = P["opus"], cfg["growth_per_call"], cfg["out_per_call"]
+    o, g, out = P[PR.base_family(base)], cfg["growth_per_call"], cfg["out_per_call"]
     fut = cfg["_fut"]
     if not delegated:
-        c = sum((ctx0 + i * g) * o["read"] + g * o["write"] + out * o["out"] for i in range(k))
-        return (c + g * max(0, k - 1) * fut * o["read"]) / 1e6
+        c = sum((ctx0 + i * g) * rates(o, ctx0 + i * g)["read"] + g * rates(o, ctx0 + i * g)["write"]
+                + out * rates(o, ctx0 + i * g)["out"] for i in range(k))
+        return (c + g * max(0, k - 1) * fut * rates(o, ctx0)["read"]) / 1e6
     s = P[model]
+    o = rates(o, ctx0)
     c = 2 * ctx0 * o["read"] + cfg["dispatch_tokens"] * o["out"] + cfg["result_tokens"] * o["write"] + out * o["out"]
     c += cfg["worker_base_tokens"] * rates(s, cfg["worker_base_tokens"])["write"]
     for j in range(max(1, round(k * cfg["worker_call_factor"]))):
@@ -224,36 +229,53 @@ def _turn_cost(cfg, ctx0, k, model, delegated):
     return (c + cfg["result_tokens"] * fut * o["read"]) / 1e6
 
 
-def expected_saving(cfg, probs, ctx0, model):
+def expected_saving(cfg, probs, ctx0, model, base="opus"):
     ks = cfg["calls_per_bucket"]
-    return sum(p * (_turn_cost(cfg, ctx0, ks[b], model, False) - _turn_cost(cfg, ctx0, ks[b], model, True))
+    return sum(p * (_turn_cost(cfg, ctx0, ks[b], model, False, base) - _turn_cost(cfg, ctx0, ks[b], model, True, base))
                for b, p in probs.items() if b in ks)
 
 
-def route(cfg, answers, ctx):
-    """Return (worker or None, expected $ saving, reason)."""
+def route(cfg, answers, ctx, base="opus"):
+    """Return (worker or None, expected $ saving, reason). `base` = model of the main session (unknown -> Opus).
+    Workers are only candidates when their output rate is clearly below the base's: fable -> opus, sonnet or haiku;
+    opus -> sonnet or haiku; sonnet -> haiku only; haiku (any generation) -> never.
+    Choice: haiku if Jev says haiku-grade (as before); else, base fable and keep_opus in the intermediate band
+    [opus_worker_keep_from, keep_opus_threshold) (some judgment needed, not enough to keep it) -> opus; else sonnet."""
+    base = PR.base_family(base)
     mf = answers["model_fit"]["probabilities"]
     if answers["sensitive"]["noul"] >= cfg["sensitive_threshold"]:
         return None, 0.0, "sensitive"
     if mf.get("keep_opus", 0) >= cfg["keep_opus_threshold"]:
         return None, 0.0, "keep_opus"
-    model = "haiku" if (mf.get("haiku", 0) >= cfg["haiku_threshold"]
-                        and answers["intent"]["choice"] in ("continue_plan", "lookup")) else "sonnet"
+    if base in ("haiku", "haiku-4"):
+        return None, 0.0, "base_cheapest"
+    want_haiku = (mf.get("haiku", 0) >= cfg["haiku_threshold"]
+                  and answers["intent"]["choice"] in ("continue_plan", "lookup"))
+    if base == "sonnet":
+        if not want_haiku:
+            return None, 0.0, "base_sonnet"
+        model = "haiku"
+    elif want_haiku:
+        model = "haiku"
+    elif base == "fable" and mf.get("keep_opus", 0) >= cfg["opus_worker_keep_from"]:
+        model = "opus"
+    else:
+        model = "sonnet"
     cfg["_fut"] = max(0.0, min(cfg["future_calls_cap"], (cfg["compact_at_tokens"] - ctx) / cfg["growth_per_call"]))
-    ev = expected_saving(cfg, answers["volume"]["probabilities"], max(ctx, 45_000), model)
+    ev = expected_saving(cfg, answers["volume"]["probabilities"], max(ctx, 45_000), model, base)
     return (model if ev > cfg["min_expected_saving_usd"] else None), ev, "ev"
 
 
-def resume_cost(cfg, ctx, cold):
+def resume_cost(cfg, ctx, cold, base="opus"):
     """$ to send the current context once (rewrite if cold, read if warm)."""
-    o = cfg["prices"]["opus"]
+    o = rates(cfg["prices"][PR.base_family(base)], ctx)
     return ctx * (o["write"] if cold else o["read"]) / 1e6
 
 
 # ---------- compaction policy ----------
-def switch_saving(cfg, ctx, kind, answers=None):
+def switch_saving(cfg, ctx, kind, answers=None, base="opus"):
     """Expected $ saved by /compact or /clear now vs carrying the context: cheaper calls ahead minus the switch cost."""
-    o = cfg["prices"]["opus"]
+    o = rates(cfg["prices"][PR.base_family(base)], ctx)
     if kind == "clear":
         after, cost = cfg["clear_base_tokens"], cfg["clear_base_tokens"] * o["write"]
     else:
@@ -264,7 +286,7 @@ def switch_saving(cfg, ctx, kind, answers=None):
     return (max(0, ctx - after) * o["read"] * ahead - cost) / 1e6
 
 
-def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0, snooze_hard=False):
+def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0, snooze_hard=False, base="opus"):
     """Return None, or (kind, why) with kind in {"compact","clear"} and why in {"cold","hard","boundary"}.
     floor = context size right after the last compaction (0 if none).
     snooze_until: after a bypass, boundary blocks wait until ctx reaches it; the hard cap only waits when the
@@ -282,7 +304,7 @@ def compact_decision(cfg, ctx, cold, answers, snooze_until=0, floor=0, snooze_ha
         return None
     if (ctx >= cfg["compact_at_tokens"] and (boundary >= cfg["boundary_threshold"] or kind == "clear")
             and ctx - floor >= cfg["block_gap_tokens"]
-            and switch_saving(cfg, ctx, kind, a) >= cfg["min_block_saving_usd"]):
+            and switch_saving(cfg, ctx, kind, a, base) >= cfg["min_block_saving_usd"]):
         return kind, "boundary"
     return None
 

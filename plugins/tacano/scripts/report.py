@@ -10,22 +10,11 @@ import statistics as st
 import sys
 
 import jevlib as J
+import prices as PR
 
-PRICES = {"opus": (4, 20, 0.20, 8), "sonnet": (2, 10, 0.20, 4), "haiku-4": (1, 5, 0.10, 2),
-          "haiku": (0.10, 0.50, 0.01, 0.20), "fable": (10, 50, 0.25, 20)}  # in,out,read,write(1h)
-HAIKU_LONG = (0.50, 2.50, 0.05, 1.00)  # Haiku 5.5, prompts over 100k tokens
-
-
-def price(model, prompt_tokens=0):
-    m = model or ""
-    if "haiku-4" in m:
-        return PRICES["haiku-4"]
-    if "haiku" in m:
-        return HAIKU_LONG if prompt_tokens > 100_000 else PRICES["haiku"]
-    for k, v in PRICES.items():
-        if k in m:
-            return v
-    return PRICES["opus"]
+PRICES = PR.PRICES          # single table (prices.py); kept here as a name for old callers
+price = PR.price            # (in, out, read, write) for a model id; unknown -> Opus
+UNITS = "API-equivalent units, not your Pro quota"
 
 
 def cost(u, model):
@@ -85,6 +74,78 @@ def opus_cost(u):
     return cost(u, "opus")
 
 
+def base_model_at(calls, t):
+    """Model of the closest main-thread call at or before t (a real model, not '<synthetic>'); None -> Opus later."""
+    best = None
+    for ts, _, _, m in calls:
+        if ts <= t and PR.family(m):
+            if best is None or ts >= best[0]:
+                best = (ts, m)
+    return best[1] if best else None
+
+
+def _acc(d, fam, n, usd):
+    e = d.setdefault(fam, [0, 0.0])
+    e[0] += n
+    e[1] += usd
+
+
+def compute_savings(log, sess):
+    """Per-action savings against a counterfactual priced at the model the main session actually used
+    (nearest earlier main-thread call; Opus if unknown). A delegation that cost MORE than the counterfactual
+    shows as negative. sess(sid) -> load_session tuple."""
+    hints = [r for r in log if str(r.get("action", "")).startswith("hint_")]
+    followed, deleg_saved, by_base_deleg = 0, 0.0, {}
+    for r in hints:
+        humans, calls, _, subs = sess(r["session"])
+        t = dt.datetime.fromisoformat(r["ts"])
+        start = next((h for h in humans if h >= t - dt.timedelta(seconds=5)), None)
+        if not start:
+            continue
+        end = next((h for h in humans if h > start), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
+        ran = []
+        for runs in subs:
+            if not (start <= runs[0][0] < end):
+                continue
+            bm = base_model_at(calls, runs[0][0])
+            if price(runs[0][3])[1] < price(bm)[1]:     # worker output rate below the base's: a cheaper worker
+                ran.append((runs, bm))
+        if not ran:
+            continue
+        followed += 1
+        main_ctx = max((c for ts, c, _, _ in calls if ts <= ran[0][0][0][0]), default=0)
+        for runs, bm in ran:
+            ctx0 = runs[0][1]
+            # Counterfactual: the same calls done by the base model inside the main context (bigger than the worker's).
+            inline = sum(cost(u, bm) + max(0, main_ctx - ctx0) * price(bm, main_ctx)[2] / 1e6 for _, _, u, _ in runs)
+            saved = inline - sum(cost(u, m) for _, _, u, m in runs)
+            deleg_saved += saved
+            _acc(by_base_deleg, PR.base_family(bm), 1, saved)
+
+    # ---- compactions Tacano asked for: lighter calls afterwards minus the cost of compacting ----
+    blocks = [r for r in log if r.get("action") == "block_compact"]
+    done, comp_saved, by_base_comp = 0, 0.0, {}
+    for r in blocks:
+        humans, calls, compactions, _ = sess(r["session"])
+        t = dt.datetime.fromisoformat(r["ts"])
+        cb = next((c for c in compactions if t <= c <= t + dt.timedelta(minutes=30)), None)
+        if not cb:
+            continue
+        done += 1
+        nxt = next((c for c in compactions if c > cb), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
+        after = [c for ts, c, _, _ in calls if cb < ts < nxt]
+        if not after:
+            continue
+        bm = base_model_at(calls, t)
+        o_in, o_out, o_read, o_write = price(bm, r["ctx"])
+        switch = (r["ctx"] * o_read + 10_000 * o_out + after[0] * o_write) / 1e6
+        saved = sum(max(0, r["ctx"] - c) for c in after) * o_read / 1e6 - switch
+        comp_saved += saved
+        _acc(by_base_comp, PR.base_family(bm), 1, saved)
+    return {"hints": len(hints), "followed": followed, "deleg_saved": deleg_saved, "by_base_deleg": by_base_deleg,
+            "blocks": len(blocks), "done": done, "comp_saved": comp_saved, "by_base_comp": by_base_comp}
+
+
 def main():
     # Windows consoles default to cp1252; never crash on a character it can't print.
     for stream in (sys.stdout, sys.stderr):
@@ -113,47 +174,12 @@ def main():
             sessions[sid] = load_session(files[sid]) if sid in files else ([], [], [], [])
         return sessions[sid]
 
-    # ---- delegation hints: followed if a cheaper subagent ran during that human turn ----
-    hints = [r for r in log if str(r.get("action", "")).startswith("hint_")]
-    followed, deleg_saved = 0, 0.0
-    for r in hints:
-        humans, calls, _, subs = sess(r["session"])
-        t = dt.datetime.fromisoformat(r["ts"])
-        start = next((h for h in humans if h >= t - dt.timedelta(seconds=5)), None)
-        if not start:
-            continue
-        end = next((h for h in humans if h > start), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
-        ran = [runs for runs in subs if start <= runs[0][0] < end and "opus" not in (runs[0][3] or "opus")]
-        if not ran:
-            continue
-        followed += 1
-        main_ctx = max((c for ts, c, _, _ in calls if ts <= ran[0][0][0]), default=0)
-        for runs in ran:
-            base = runs[0][1]
-            # Counterfactual: the same calls done by Opus inside the main context (which is bigger than the worker's).
-            inline = sum(opus_cost(u) + max(0, main_ctx - base) * PRICES["opus"][2] / 1e6 for _, _, u, _ in runs)
-            deleg_saved += inline - sum(cost(u, m) for _, _, u, m in runs)
-
-    # ---- compactions Tacaño asked for: lighter calls afterwards minus the cost of compacting ----
-    blocks = [r for r in log if r.get("action") == "block_compact"]
-    done, comp_saved = 0, 0.0
-    for r in blocks:
-        humans, calls, compactions, _ = sess(r["session"])
-        t = dt.datetime.fromisoformat(r["ts"])
-        cb = next((c for c in compactions if t <= c <= t + dt.timedelta(minutes=30)), None)
-        if not cb:
-            continue
-        done += 1
-        nxt = next((c for c in compactions if c > cb), dt.datetime.max.replace(tzinfo=dt.timezone.utc))
-        after = [c for ts, c, _, _ in calls if cb < ts < nxt]
-        if not after:
-            continue
-        o_in, o_out, o_read, o_write = PRICES["opus"]
-        switch = (r["ctx"] * o_read + 10_000 * o_out + after[0] * o_write) / 1e6
-        comp_saved += sum(max(0, r["ctx"] - c) for c in after) * o_read / 1e6 - switch
+    sv = compute_savings(log, sess)
+    hints, followed, deleg_saved = sv["hints"], sv["followed"], sv["deleg_saved"]
+    blocks, done, comp_saved = sv["blocks"], sv["done"], sv["comp_saved"]
     clears = [r for r in log if r.get("action") == "block_clear"]
     cfg = J.config()
-    clear_model = sum(J.switch_saving(cfg, r["ctx"], "clear", None) for r in clears)
+    clear_model = sum(J.switch_saving(cfg, r["ctx"], "clear", None, r.get("base", "opus")) for r in clears)
 
     # ---- raw before/after (all Claude Code spend; depends on what you worked on) ----
     usd = {"before": 0.0, "after": 0.0}
@@ -176,12 +202,19 @@ def main():
         print(f"hook latency p50 {st.median(hm):.0f} ms, p90 {sorted(hm)[int(.9 * len(hm))]} ms")
     print()
     print("What Tacano saved (estimates, per action):")
-    print(f"  delegation hints: {len(hints)}, followed {followed} -> ~${deleg_saved:,.2f} vs doing that work in Opus")
-    print(f"  /compact blocks:  {len(blocks)}, compacted {done} -> ~${comp_saved:,.2f} in lighter calls after, net of compaction cost")
+    print(f"  delegation hints: {hints}, followed {followed} -> ~${deleg_saved:,.2f} vs doing that work in the session's own model")
+    print(f"  /compact blocks:  {blocks}, compacted {done} -> ~${comp_saved:,.2f} in lighter calls after, net of compaction cost")
     print(f"  /clear blocks:    {len(clears)} -> ~${clear_model:,.2f} modeled (the new session isn't linked to the old one)")
-    print(f"  total ~${deleg_saved + comp_saved + clear_model:,.2f}")
+    print(f"  total ~${deleg_saved + comp_saved + clear_model:,.2f}   ({UNITS})")
+    fams = sorted(set(sv["by_base_deleg"]) | set(sv["by_base_comp"]))
+    if fams:
+        print("  by base model (the model the session was running):")
+        for f in fams:
+            dn, dv = sv["by_base_deleg"].get(f, [0, 0.0])
+            cn, cv = sv["by_base_comp"].get(f, [0, 0.0])
+            print(f"    {f:>8}: delegations {dn} -> ${dv:,.2f}  |  compactions {cn} -> ${cv:,.2f}")
     print()
-    print("Raw spend per human prompt (all Claude Code use, not attributable to Tacano alone):")
+    print(f"Raw spend per human prompt (all Claude Code use, not attributable to Tacano alone; {UNITS}):")
     for k in ("before", "after"):
         label = "before install" if k == "before" else "since"
         print(f"  {label:>14}: ${usd[k]:,.2f} over {prompts[k]} prompts -> ${usd[k] / max(1, prompts[k]):.3f} per prompt")

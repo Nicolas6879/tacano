@@ -73,8 +73,9 @@ def main():
     m = MSG.get(cfg["lang"], MSG["en"])
     info = J.read_transcript(inp.get("transcript_path"))
     ctx = info["ctx"]
+    base = info.get("model")   # main-session model id; unknown/None -> Opus pricing (jevlib/prices fall back)
     cold = info["idle_min"] is not None and info["idle_min"] > cfg["cold_after_minutes"]
-    rec = {"session": sid, "ctx": ctx, "cold": cold, "prompt_hash": J.h(prompt), "prompt_len": len(prompt)}
+    rec = {"session": sid, "ctx": ctx, "cold": cold, "prompt_hash": J.h(prompt), "prompt_len": len(prompt), "base": J.PR.base_family(base)}
 
     # Same prompt resent shortly after a block = explicit override.
     override = (st.get("blocked_hash") == J.h(prompt)
@@ -105,11 +106,11 @@ def main():
     if cold or time.time() - st.get("snooze_at", 0) > cfg["snooze_max_minutes"] * 60:
         snooze = 0
     dec = None if override else J.compact_decision(cfg, ctx, cold, answers, snooze, st.get("floor", 0),
-                                                    st.get("snooze_hard", False))
+                                                    st.get("snooze_hard", False), base)
     if dec:
         kind, why = dec
-        now = J.resume_cost(cfg, ctx, False)
-        first = J.resume_cost(cfg, ctx, True)
+        now = J.resume_cost(cfg, ctx, False, base)
+        first = J.resume_cost(cfg, ctx, True, base)
         reason = m[kind].format(ctx=ctx // 1000, cold=m["cold"] if cold else "", now=now,
                                 cw=m["cw"].format(first=first) if cold else "",
                                 why=m["why_boundary"] if why == "boundary" else "")
@@ -120,13 +121,13 @@ def main():
                   pending_at=time.time(), cwd=inp.get("cwd"))
         rec.update(action="block_" + kind, why=why)
     elif answers:
-        worker, ev, why = J.route(cfg, answers, ctx)
+        worker, ev, why = J.route(cfg, answers, ctx, base)
         rec.update(action="hint_" + worker if worker else "silent", ev=round(ev, 3), why=why)
         if worker:
             vol = max(answers["volume"]["probabilities"].items(), key=lambda kv: kv[1])
             out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                    "additionalContext": m["hint"].format(vol=vol[0], p=vol[1], worker=worker, ev=ev,
-                                                       tools=worker + ("-browser-worker" if worker == "haiku" else "-tools-worker"))}}
+                                                       tools="haiku-browser-worker" if worker == "haiku" else "sonnet-tools-worker")}}
     else:
         rec["action"] = "silent_nojev"
     J.save_state(sid, st)
