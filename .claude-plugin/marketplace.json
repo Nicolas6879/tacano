@@ -7,7 +7,7 @@
     {
       "name": "tacano",
       "source": "./plugins/tacano",
-      "description": "Tacaño (Spanish for 'stingy') makes Claude Code stingy with tokens: ~39% less spend, same Opus. Jev-powered compaction timing, verbatim handoff across /compact and cheap-worker delegation.",
+      "description": "Tacaño (Spanish for 'stingy') makes Claude Code stingy with tokens: Jev-powered compaction timing, verbatim handoff across /compact and cheap-worker delegation.",
       "displayName": "Tacaño"
     }
   ]

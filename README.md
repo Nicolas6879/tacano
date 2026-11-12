@@ -143,7 +143,7 @@ plugins/tacano/
   scripts/precompact.py             saves the verbatim handoff
   scripts/session.py                re-injects the handoff and any held-back message
   scripts/report.py                 measures real savings
-  agents/                           sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
+  agents/                           opus-worker, sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
   skills/orchestrator/              protocol for Opus
   skills/setup/ + scripts/setup.py  /tacano:setup, opt-in to Opus-as-orchestrator
   skills/report/                    /tacano:report, runs scripts/report.py

@@ -138,7 +138,7 @@ plugins/tacano/
   scripts/precompact.py             guarda el traspaso literal
   scripts/session.py                reinyecta el traspaso y el mensaje pendiente
   scripts/report.py                 mide el ahorro real
-  agents/                           sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
+  agents/                           opus-worker, sonnet-worker, haiku-worker, sonnet-tools-worker, haiku-browser-worker (MCP/browser)
   skills/orchestrator/          protocolo para Opus
   skills/setup/ + scripts/setup.py  /tacano:setup, activar a Opus como orquestador
   skills/report/                    /tacano:report, ejecuta scripts/report.py
